@@ -1,6 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY missing");
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 export interface CultInfo {
   name: string;
@@ -19,6 +27,7 @@ export interface CultInfo {
 }
 
 export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
+  const ai = getAI();
   const customContext = prompt ? `The user wants a cult centered around: ${prompt}` : "Generate a random absurd internet cult.";
 
   const response = await ai.models.generateContent({
@@ -68,6 +77,7 @@ export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
 }
 
 export async function generateCultLogo(name: string, slogan: string): Promise<string> {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: {
