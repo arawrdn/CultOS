@@ -123,7 +123,11 @@ export default function App() {
     let index = 0;
     const interval = setInterval(() => {
       if (index < TERMINAL_MESSAGES.length) {
-        setTerminalLogs(prev => [...prev, TERMINAL_MESSAGES[index]].slice(-8));
+        setTerminalLogs(prev => {
+          const logs = Array.isArray(prev) ? prev : [];
+          const nextMsg = TERMINAL_MESSAGES[index];
+          return nextMsg ? [...logs, nextMsg].slice(-8) : logs;
+        });
         index++;
       } else {
         clearInterval(interval);
@@ -151,7 +155,10 @@ export default function App() {
   };
 
   const addTerminalLog = (msg: string) => {
-    setTerminalLogs(prev => [...prev, `> ${msg}`].slice(-8));
+    setTerminalLogs(prev => {
+      const logs = Array.isArray(prev) ? prev : [];
+      return [...logs, `> ${msg}`].slice(-8);
+    });
   };
 
   const handleGenerate = async () => {
@@ -198,10 +205,19 @@ export default function App() {
           name: 'CultOS',
           icon: window.location.origin + '/favicon.ico',
         },
-        onFinish: (data) => {
+        onFinish: (data: any) => {
           setIsTransferring(false);
-          addTerminalLog(`FEE PAID. TXID: ${data.txId.substring(0, 12)}...`);
-          setTimeout(() => addTerminalLog(`CULT MANIFESTED ON MAINNET: ${generatedCult.name}`), 1000);
+          const txId = data?.txId;
+          if (typeof txId === 'string') {
+            addTerminalLog(`FEE PAID. TXID: ${txId.slice(0, 12)}...`);
+          } else {
+            addTerminalLog("FEE PAID. TRANSACTION BROADCASTED.");
+          }
+          setTimeout(() => {
+            if (generatedCult) {
+              addTerminalLog(`CULT MANIFESTED ON MAINNET: ${generatedCult.name}`);
+            }
+          }, 1000);
           confetti();
         },
         onCancel: () => {
@@ -301,7 +317,11 @@ export default function App() {
                   title="View on Explorer"
                 >
                   <ExternalLink className="w-4 h-4 text-purple-400" />
-                  {stxAddress.substring(0, 5)}...{stxAddress.substring(stxAddress.length - 4)}
+                  {typeof stxAddress === 'string' && stxAddress.length > 10 ? (
+                    <>{stxAddress.slice(0, 5)}...{stxAddress.slice(-4)}</>
+                  ) : (
+                    stxAddress ? String(stxAddress) : '0x...'
+                  )}
                 </a>
                 <button 
                   onClick={disconnectWallet}
