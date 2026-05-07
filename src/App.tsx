@@ -222,18 +222,27 @@ export default function App() {
           addTerminalLog("AUTH_CORE: USER_CANCELED");
         },
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message?.includes('User canceled') || String(error).includes('User canceled')) {
+        addTerminalLog("AUTH_CORE: USER_CANCELED");
+        return;
+      }
       console.error("Connection error:", error);
       // Fallback to showConnect if authenticate fails
       if (typeof showConnect === 'function') {
-        showConnect({
-          appDetails: {
-            name: 'CultOS',
-            icon: window.location.origin + '/favicon.ico',
-          },
-          userSession,
-          onFinish: () => window.location.reload(),
-        });
+        try {
+          showConnect({
+            appDetails: {
+              name: 'CultOS',
+              icon: window.location.origin + '/favicon.ico',
+            },
+            userSession,
+            onFinish: () => window.location.reload(),
+            onCancel: () => addTerminalLog("AUTH_CORE: USER_CANCELED"),
+          });
+        } catch(fallbackErr) {
+          console.error("Fallback connection error:", fallbackErr);
+        }
       } else {
         addTerminalLog("ERROR: AUTH_PROTOCOL_VIOLATION");
       }
