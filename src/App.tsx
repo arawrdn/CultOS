@@ -268,7 +268,7 @@ export default function App() {
 
       await openSTXTransfer({
         network: STACKS_MAINNET,
-        recipient: 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF',
+        recipient: stxAddress, // Use the connected wallet address
         amount: '25000000', // 25 STX in microSTX
         memo: 'CultOS Genesis Subscription',
         onFinish: (data: { txId: string }) => {
@@ -307,8 +307,9 @@ export default function App() {
         origin: { y: 0.6 },
         colors: ['#a855f7', '#22c55e', '#ffffff']
       });
-    } catch (error) {
-      addTerminalLog("AI SEQUENCER FAILURE: REBOOTING...");
+    } catch (error: any) {
+      console.error("AI Sequential error:", error);
+      addTerminalLog("AI SEQUENCER FAILURE: " + (error?.message || "Unknown error"));
     } finally {
       setIsGenerating(false);
     }
