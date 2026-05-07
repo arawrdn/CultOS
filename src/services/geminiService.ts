@@ -3,8 +3,11 @@ import { GoogleGenAI, Type } from "@google/genai";
 let aiInstance: GoogleGenAI | null = null;
 function getAI() {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY missing");
+    const apiKey = (process as any).env?.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn("GEMINI_API_KEY missing");
+      return null;
+    }
     aiInstance = new GoogleGenAI({ apiKey });
   }
   return aiInstance;
@@ -28,6 +31,7 @@ export interface CultInfo {
 
 export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
   const ai = getAI();
+  if (!ai) throw new Error("AI synthesis core unavailable.");
   const customContext = prompt ? `The user wants a cult centered around: ${prompt}` : "Generate a random absurd internet cult.";
 
   const response = await ai.models.generateContent({
@@ -78,6 +82,7 @@ export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
 
 export async function generateCultLogo(name: string, slogan: string): Promise<string> {
   const ai = getAI();
+  if (!ai) throw new Error("Visual synthesis core unavailable.");
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: {

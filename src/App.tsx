@@ -22,7 +22,7 @@ import {
 import { cn } from './lib/utils';
 import { generateCultInfo, generateCultLogo, type CultInfo } from './services/geminiService';
 import confetti from 'canvas-confetti';
-import { AppConfig, UserSession, showConnect, openSTXTransfer } from '@stacks/connect';
+import { AppConfig, UserSession, showConnect, authenticate, openSTXTransfer } from '@stacks/connect';
 import { STACKS_MAINNET } from '@stacks/network';
 
 const TERMINAL_MESSAGES = [
@@ -41,6 +41,8 @@ export default function App() {
   const [generatedCult, setGeneratedCult] = useState<CultInfo | null>(null);
   const [stxBalance, setStxBalance] = useState<string>('0.00');
   const [showTemplate, setShowTemplate] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
   const [cultTheme, setCultTheme] = useState('');
   const [customLogo, setCustomLogo] = useState<string | null>(null);
@@ -78,9 +80,48 @@ export default function App() {
   const appConfig = useMemo(() => new AppConfig(['store_write', 'publish_data']), []);
   const userSession = useMemo(() => new UserSession({ appConfig }), [appConfig]);
 
-  const userData = userSession.isUserSignedIn() ? userSession.loadUserData() : null;
-  const stxAddress = userData?.profile?.stxAddress?.mainnet || userData?.profile?.stxAddress?.testnet || '';
-  const walletConnected = userSession.isUserSignedIn();
+  const [walletData, setWalletData] = useState<{
+    userData: any;
+    stxAddress: string;
+    walletConnected: boolean;
+  }>({
+    userData: null,
+    stxAddress: '',
+    walletConnected: false
+  });
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        if (userSession.isUserSignedIn()) {
+          const userData = userSession.loadUserData();
+          const stxAddress = userData?.profile?.stxAddress?.mainnet || userData?.profile?.stxAddress?.testnet || '';
+          setWalletData({
+            userData,
+            stxAddress,
+            walletConnected: true
+          });
+        } else if (userSession.isSignInPending()) {
+          addTerminalLog("PROCESSING AUTH_RESPONSE...");
+          const userData = await userSession.handlePendingSignIn();
+          const stxAddress = userData?.profile?.stxAddress?.mainnet || userData?.profile?.stxAddress?.testnet || '';
+          setWalletData({
+            userData,
+            stxAddress,
+            walletConnected: true
+          });
+          // Clean up the URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          addTerminalLog("AUTH_CORE: SECURE_SESSION_ESTABLISHED");
+        }
+      } catch (e) {
+        console.error("Auth check error:", e);
+      }
+    };
+    checkAuth();
+  }, [userSession]);
+
+  const { userData, stxAddress, walletConnected } = walletData;
 
   // Fetch real STX balance with auto-refresh
   useEffect(() => {
@@ -136,17 +177,58 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Detect available wallet protocols
+  useEffect(() => {
+    const detectProtocols = () => {
+      const protocols = [];
+      if (typeof window !== 'undefined') {
+        if ((window as any).StacksProvider) protocols.push("Stacks");
+        if ((window as any).LeatherProvider) protocols.push("Leather");
+        if ((window as any).XverseProviders || (window as any).xverse) protocols.push("Xverse");
+        if ((window as any).okxwallet) protocols.push("OKX");
+        
+        if (protocols.length > 0) {
+          addTerminalLog(`PROTOCOLS_READY: ${protocols.join(' | ')}`);
+        }
+      }
+    };
+    // Small delay to ensure providers are injected
+    const timer = setTimeout(detectProtocols, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const connectWallet = () => {
-    showConnect({
-      appDetails: {
-        name: 'CultOS',
-        icon: window.location.origin + '/favicon.ico',
-      },
-      onFinish: () => {
-        window.location.reload();
-      },
-      userSession,
-    });
+    addTerminalLog("INITIATING AUTH_CORE_HANDSHAKE...");
+    
+    // In mobile browsers (Leather/Xverse), showConnect is the preferred way to trigger the wallet selection UI.
+    // authenticate is the fallback if showConnect is somehow missing.
+    const authFn = typeof showConnect === 'function' ? showConnect : authenticate;
+    
+    if (typeof authFn !== 'function') {
+      console.error("Auth function not found", { showConnect, authenticate });
+      addTerminalLog("ERROR: AUTH_CORE_MISSING");
+      return;
+    }
+
+    try {
+      authFn({
+        appDetails: {
+          name: 'CultOS',
+          icon: window.location.origin + '/favicon.ico',
+        },
+        onFinish: () => {
+          localStorage.setItem('cultos_auth_success', 'true');
+          window.location.reload();
+        },
+        onCancel: () => {
+          addTerminalLog("AUTH_CORE: USER_CANCELED");
+        },
+        userSession,
+      });
+    } catch (error) {
+      console.error("Connection error:", error);
+      addTerminalLog("ERROR: AUTH_PROTOCOL_VIOLATION");
+    }
   };
 
   const disconnectWallet = () => {
@@ -196,6 +278,10 @@ export default function App() {
     addTerminalLog("INITIATING STACKS BROADCAST FEE [0.1 STX]...");
 
     try {
+      if (typeof openSTXTransfer !== 'function') {
+        throw new Error("STX_TRANSFER_CORE_MISSING");
+      }
+
       await openSTXTransfer({
         network: STACKS_MAINNET,
         recipient: 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF', // Updated fee collection address
@@ -291,21 +377,114 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* About Modal */}
+      <AnimatePresence>
+        {showAbout && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/95 backdrop-blur-2xl"
+            onClick={() => setShowAbout(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900 border border-purple-500/30 p-8 rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                <Globe className="w-32 h-32 text-purple-500" />
+              </div>
+              <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4 flex items-center gap-2">
+                <Info className="w-6 h-6 text-purple-500" />
+                About CultOS
+              </h3>
+              <div className="space-y-4 text-gray-300 leading-relaxed font-medium">
+                <p>
+                  CultOS is the world's first <span className="text-purple-400">Memetic Manifestation Engine</span> built on the Bitcoin alpha layer via Stacks. 
+                </p>
+                <p>
+                  We leverage advanced neural synthesis to bridge the gap between internet subcultures and permanent blockchain identity. Every cult generated is a unique algorithmic artifacts, ready for mainnet deployment.
+                </p>
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10 uppercase text-[10px] tracking-widest text-zinc-500 font-bold">
+                  v1.0 Genesis Phase // Neural Core: Active
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAbout(false)}
+                className="mt-8 w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl transition-all uppercase tracking-widest"
+              >
+                Close Protocol
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Disclaimer Modal */}
+      <AnimatePresence>
+        {showDisclaimer && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/98 backdrop-blur-3xl"
+            onClick={() => setShowDisclaimer(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900 border border-red-500/30 p-8 rounded-3xl w-full max-w-lg shadow-2xl relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-2xl font-black text-red-500 uppercase tracking-tighter mb-4 flex items-center gap-2">
+                <ShieldAlert className="w-6 h-6" />
+                Chaos Disclaimer
+              </h3>
+              <div className="space-y-4 text-gray-400 text-sm leading-relaxed uppercase font-mono">
+                <p className="text-white font-bold">WARNING: HIGH VOLATILITY DETECTED.</p>
+                <p>
+                  CultOS is an experimental art project and memetic generator. Synthesized "cults" are digital artifacts. Financial advice is not provided.
+                </p>
+                <p>
+                  Deployment to the Stacks mainnet involves real crypto-assets (STX). Users assume 100% responsibility for all on-chain interactions and memetic fallout.
+                </p>
+                <p className="p-3 border border-red-500/20 rounded bg-red-500/5 text-red-400/80">
+                  By using this software, you acknowledge that internet religions are highly unpredictable and may result in extreme satisfaction or absolute chaos.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowDisclaimer(false)}
+                className="mt-8 w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl transition-all uppercase tracking-widest"
+              >
+                I Accept the Chaos
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
-      <header className="h-16 border-b border-white/10 bg-black/40 backdrop-blur-md flex items-center justify-between px-6 z-50 shrink-0">
+      <header className="min-h-16 lg:h-16 border-b border-white/10 bg-black/90 lg:bg-black/40 backdrop-blur-md flex items-center justify-between px-4 lg:px-6 z-[100] shrink-0 relative py-2 lg:py-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-green-400 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)]">
             <span className="text-black font-black text-xl">Ω</span>
           </div>
-          <span className="text-2xl font-bold tracking-tighter text-white uppercase">Cult<span className="text-purple-500">OS</span></span>
-          <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded border border-green-500/30 font-mono ml-2">MAINNET_V1.0</span>
+          <span className="text-lg lg:text-2xl font-bold tracking-tighter text-white uppercase">Cult<span className="text-purple-500">OS</span></span>
+          <span className="hidden sm:inline text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded border border-green-500/30 font-mono ml-2 uppercase">Mainnet</span>
         </div>
         
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 lg:gap-6 relative z-[101]">
+          <div className="hidden md:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-500">
+            <button onClick={() => setShowAbout(true)} className="hover:text-purple-400 transition-colors">About</button>
+            <button onClick={() => setShowDisclaimer(true)} className="hover:text-red-400 transition-colors">Disclaimer</button>
+          </div>
+
           {walletConnected ? (
-            <div className="flex items-center gap-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-gray-500 font-mono uppercase">Stacks Balance</span>
+            <div className="flex items-center gap-3 lg:gap-6 animate-in fade-in slide-in-from-right-4 duration-500">
+              <div className="hidden md:flex flex-col items-end">
+                <span className="text-[10px] text-gray-500 font-mono uppercase">Balance</span>
                 <span className="text-sm font-bold text-white tracking-wide">{stxBalance} STX</span>
               </div>
               <div className="flex items-center gap-2">
@@ -313,10 +492,10 @@ export default function App() {
                   href={`https://explorer.hiro.so/address/${stxAddress}?chain=mainnet`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full font-bold text-sm transition-colors border border-white/5"
+                  className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 lg:px-4 py-2 rounded-full font-bold text-xs lg:text-sm transition-colors border border-white/5"
                   title="View on Explorer"
                 >
-                  <ExternalLink className="w-4 h-4 text-purple-400" />
+                  <ExternalLink className="w-3 h-3 lg:w-4 lg:h-4 text-purple-400" />
                   {typeof stxAddress === 'string' && stxAddress.length > 10 ? (
                     <>{stxAddress.slice(0, 5)}...{stxAddress.slice(-4)}</>
                   ) : (
@@ -335,22 +514,22 @@ export default function App() {
           ) : (
             <button 
               onClick={connectWallet}
-              className="bg-white text-black px-6 py-2 rounded-full font-bold text-sm hover:bg-purple-400 transition-colors shadow-[0_0_15px_rgba(255,255,255,0.2)] flex items-center gap-2"
+              className="bg-white text-black px-5 lg:px-6 py-2.5 lg:py-2 rounded-full font-bold text-xs lg:text-sm hover:bg-purple-400 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center gap-2 relative z-[102]"
             >
               <Wallet className="w-4 h-4" />
-              Connect Wallet
+              Connect
             </button>
           )}
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex gap-4 p-4 overflow-hidden bg-[radial-gradient(circle_at_50%_50%,#1a1025_0%,#050505_100%)]">
+      <main className="flex-1 flex flex-col lg:flex-row gap-4 p-4 overflow-y-auto lg:overflow-hidden bg-[radial-gradient(circle_at_50%_50%,#1a1025_0%,#050505_100%)]">
         
         {/* Left Sidebar: Terminal & Stats */}
-        <aside className="w-72 flex flex-col gap-4 overflow-hidden shrink-0">
+        <aside className="w-full lg:w-72 flex lg:flex-col gap-4 overflow-hidden shrink-0">
           {/* Terminal */}
-          <div className="flex-[2] bg-black/60 border border-purple-500/30 rounded-xl p-4 font-mono text-[11px] relative overflow-hidden flex flex-col shadow-[inset_0_0_20px_rgba(168,85,247,0.1)]">
+          <div className="flex-[2] bg-black/60 border border-purple-500/30 rounded-xl p-4 font-mono text-[11px] relative overflow-hidden flex flex-col shadow-[inset_0_0_20px_rgba(168,85,247,0.1)] min-h-[150px] lg:min-h-0">
             <div className="absolute top-0 left-0 w-full h-0.5 bg-purple-500/50 shadow-[0_0_10px_#a855f7]"></div>
             <div className="text-green-400 mb-2 font-bold tracking-tight">[SYS] INITIALIZING_CULT_ENGINE...</div>
             <div className="flex-1 space-y-1 overflow-hidden">
@@ -407,37 +586,37 @@ export default function App() {
         </aside>
 
         {/* Center: Generator & Main Card */}
-        <section className="flex-1 flex flex-col gap-4 overflow-hidden">
+        <section className="flex-1 flex flex-col gap-4 lg:overflow-hidden">
           {/* Generator Control Bar */}
-          <div className="h-24 bg-gradient-to-r from-purple-900/40 to-green-900/40 border border-white/10 rounded-2xl flex items-center justify-between px-8 shrink-0 relative overflow-hidden group shadow-lg">
+          <div className="min-h-[96px] bg-gradient-to-r from-purple-900/40 to-green-900/40 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center justify-between px-6 lg:px-8 py-4 sm:py-0 shrink-0 relative overflow-hidden group shadow-lg gap-4">
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
               <Cpu className="w-16 h-16" />
             </div>
-            <div className="relative z-10 flex flex-col gap-1">
-              <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <div className="relative z-10 flex flex-col gap-1 w-full sm:w-auto">
+              <h2 className="text-lg lg:text-xl font-bold text-white tracking-tight flex items-center gap-2">
                 Construct New Cult 
                 <span className="text-[8px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30 uppercase animate-pulse">Live</span>
               </h2>
               <div className="flex items-center gap-4 mt-2">
-                <div className="relative">
+                <div className="relative w-full sm:w-64">
                   <input 
                     type="text"
                     value={cultTheme}
                     onChange={(e) => setCultTheme(e.target.value)}
-                    placeholder="Enter Cult Theme (Optional)..."
-                    className="bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 w-64 transition-all"
+                    placeholder="Enter Theme..."
+                    className="bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 w-full transition-all"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     <Zap className={cn("w-3 h-3 text-purple-500", cultTheme ? "animate-pulse" : "opacity-30")} />
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-500 italic max-w-[120px] leading-tight">AI-Generated viral consensus layers</p>
+                <p className="hidden md:block text-[10px] text-gray-500 italic max-w-[120px] leading-tight">AI-Generated viral layers</p>
               </div>
             </div>
             <button 
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="bg-purple-600 hover:bg-purple-500 text-white font-black px-10 py-3 rounded-xl shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all transform active:scale-95 uppercase tracking-widest italic disabled:opacity-50 disabled:cursor-not-allowed h-fit self-center"
+              className="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white font-black px-10 py-3 rounded-xl shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all transform active:scale-95 uppercase tracking-widest italic disabled:opacity-50 disabled:cursor-not-allowed h-fit self-center z-10"
             >
               {isGenerating ? "Manifesting..." : "Manifest"}
             </button>
@@ -604,9 +783,9 @@ export default function App() {
         </section>
 
         {/* Right Sidebar: Leaderboard & Premium */}
-        <aside className="w-72 flex flex-col gap-4 shrink-0">
+        <aside className="w-full lg:w-72 flex flex-col sm:flex-row lg:flex-col gap-4 shrink-0 pb-10 lg:pb-0">
           {/* Leaderboard */}
-          <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col overflow-hidden shadow-lg backdrop-blur-sm">
+          <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col overflow-hidden shadow-lg backdrop-blur-sm min-h-[300px] sm:min-h-0">
             <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4 flex items-center justify-between">
               Trending Sects 
               <span className="text-[9px] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded border border-green-500/20 font-mono">LIVE</span>
@@ -654,13 +833,17 @@ export default function App() {
         </aside>
       </main>
 
-      {/* Footer Bar */}
-      <footer className="h-8 bg-black border-t border-white/5 px-6 flex items-center justify-between text-[9px] font-mono text-gray-500 shrink-0">
-        <div className="flex gap-6 uppercase tracking-widest font-bold">
-          <span className="flex items-center gap-1.5"><ShieldAlert className="w-3 h-3 text-red-500/50" /> CONTRACT: SP2...910_SIP010</span>
+      {/* Footer Bar (Mobile optimized) */}
+      <footer className="bg-black border-t border-white/5 px-4 py-2 flex flex-col md:flex-row items-center justify-between text-[9px] font-mono text-gray-500 shrink-0 gap-2">
+        <div className="md:hidden flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">
+          <button onClick={() => setShowAbout(true)} className="hover:text-purple-400 transition-colors">About</button>
+          <button onClick={() => setShowDisclaimer(true)} className="hover:text-red-400 transition-colors">Disclaimer</button>
+        </div>
+        <div className="flex flex-wrap justify-center gap-4 lg:gap-6 uppercase tracking-widest font-bold">
+          <span className="flex items-center gap-1.5"><ShieldAlert className="w-3 h-3 text-red-500/50" /> CONTRACT: SP2...SIP010</span>
           <span className="flex items-center gap-1.5"><Activity className="w-3 h-3 text-purple-500/50" /> NETWORK: STACKS_POX_V4</span>
         </div>
-        <div className="flex gap-6 uppercase tracking-widest font-bold">
+        <div className="flex flex-wrap justify-center gap-4 lg:gap-6 uppercase tracking-widest font-bold">
           <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div> SYSTEM_READY</span>
           <span>CULTOS © 2026_GENESIS</span>
         </div>
