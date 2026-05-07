@@ -1,6 +1,6 @@
 # 🧿 CultOS: Viral Consensus Architect
 
-**CultOZ** is a decentralized "cult-as-a-service" platform built on the Stacks blockchain. It leverages generative AI to manifest viral consensus layers (tokens) by synthesizing lore, branding, and economic blueprints directly from the cultural zeitgeist.
+**CultOS** is a decentralized "cult-as-a-service" platform built on the Stacks blockchain. It leverages generative AI to manifest viral consensus layers (tokens) by synthesizing lore, branding, and economic blueprints directly from the cultural zeitgeist.
 
 ![License](https://img.shields.io/badge/license-MIT-purple)
 ![Stacks](https://img.shields.io/badge/chain-Stacks-orange)
