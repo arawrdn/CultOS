@@ -616,7 +616,7 @@ export default function App() {
             <button 
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white font-black px-10 py-3 rounded-xl shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all transform active:scale-95 uppercase tracking-widest italic disabled:opacity-50 disabled:cursor-not-allowed h-fit self-center z-10"
+              className="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white font-black px-10 py-3 rounded-xl shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all transform active:scale-95 uppercase tracking-widest italic disabled:opacity-50 disabled:cursor-not-allowed h-fit self-center relative z-10"
             >
               {isGenerating ? "Manifesting..." : "Manifest"}
             </button>
