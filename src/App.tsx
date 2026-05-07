@@ -103,16 +103,21 @@ export default function App() {
           });
         } else if (userSession.isSignInPending()) {
           addTerminalLog("PROCESSING AUTH_RESPONSE...");
-          const userData = await userSession.handlePendingSignIn();
-          const stxAddress = userData?.profile?.stxAddress?.mainnet || userData?.profile?.stxAddress?.testnet || '';
-          setWalletData({
-            userData,
-            stxAddress,
-            walletConnected: true
-          });
+          try {
+            const userData = await userSession.handlePendingSignIn();
+            const stxAddress = userData?.profile?.stxAddress?.mainnet || userData?.profile?.stxAddress?.testnet || '';
+            setWalletData({
+              userData,
+              stxAddress,
+              walletConnected: true
+            });
+            addTerminalLog("AUTH_CORE: SECURE_SESSION_ESTABLISHED");
+          } catch (err) {
+            console.error("Pending sign-in error:", err);
+            addTerminalLog("ERROR: AUTH_SESSION_COLLAPSED");
+          }
           // Clean up the URL
           window.history.replaceState({}, document.title, window.location.pathname);
-          addTerminalLog("AUTH_CORE: SECURE_SESSION_ESTABLISHED");
         }
       } catch (e) {
         console.error("Auth check error:", e);
@@ -200,34 +205,38 @@ export default function App() {
   const connectWallet = () => {
     addTerminalLog("INITIATING AUTH_CORE_HANDSHAKE...");
     
-    // In mobile browsers (Leather/Xverse), showConnect is the preferred way to trigger the wallet selection UI.
-    // authenticate is the fallback if showConnect is somehow missing.
-    const authFn = typeof showConnect === 'function' ? showConnect : authenticate;
-    
-    if (typeof authFn !== 'function') {
-      console.error("Auth function not found", { showConnect, authenticate });
-      addTerminalLog("ERROR: AUTH_CORE_MISSING");
-      return;
-    }
-
+    // authenticate is the robust direct way for wallet interaction
     try {
-      authFn({
+      authenticate({
         appDetails: {
           name: 'CultOS',
           icon: window.location.origin + '/favicon.ico',
         },
+        userSession,
         onFinish: () => {
           localStorage.setItem('cultos_auth_success', 'true');
-          window.location.reload();
+          // Give it a tiny moment to ensure user session is written to persistent storage
+          setTimeout(() => window.location.reload(), 100);
         },
         onCancel: () => {
           addTerminalLog("AUTH_CORE: USER_CANCELED");
         },
-        userSession,
       });
     } catch (error) {
       console.error("Connection error:", error);
-      addTerminalLog("ERROR: AUTH_PROTOCOL_VIOLATION");
+      // Fallback to showConnect if authenticate fails
+      if (typeof showConnect === 'function') {
+        showConnect({
+          appDetails: {
+            name: 'CultOS',
+            icon: window.location.origin + '/favicon.ico',
+          },
+          userSession,
+          onFinish: () => window.location.reload(),
+        });
+      } else {
+        addTerminalLog("ERROR: AUTH_PROTOCOL_VIOLATION");
+      }
     }
   };
 
@@ -243,7 +252,47 @@ export default function App() {
     });
   };
 
+  const handleSubscription = async () => {
+    if (!walletConnected) {
+      addTerminalLog("ERROR: AUTH_REQUIRED_FOR_SUBSCRIPTION");
+      connectWallet();
+      return;
+    }
+
+    addTerminalLog("INITIATING PREMIUM_GENESIS_ENROLLMENT [25 STX]...");
+
+    try {
+      if (typeof openSTXTransfer !== 'function') {
+        throw new Error("STX_TRANSFER_CORE_MISSING");
+      }
+
+      await openSTXTransfer({
+        network: STACKS_MAINNET,
+        recipient: 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF',
+        amount: '25000000', // 25 STX in microSTX
+        memo: 'CultOS Genesis Subscription',
+        onFinish: (data: { txId: string }) => {
+          const txId = data.txId;
+          addTerminalLog(`SUBSCRIPTION PAID. TXID: ${txId.slice(0, 12)}...`);
+          confetti({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#a855f7', '#4ade80', '#ffffff']
+          });
+        },
+        onCancel: () => {
+          addTerminalLog("TRANSFER_CORE: USER_ABORTED");
+        }
+      });
+    } catch (err) {
+      addTerminalLog("ERROR: SUBSCRIPTION_BROADCAST_FAILED");
+      console.error(err);
+    }
+  };
+
   const handleGenerate = async () => {
+    if (isGenerating) return;
     setIsGenerating(true);
     setCustomLogo(null);
     addTerminalLog(cultTheme ? `INITIATING AI CULT SEQUENCER FOR: ${cultTheme.toUpperCase()}...` : "INITIATING AI CULT SEQUENCER...");
@@ -614,9 +663,13 @@ export default function App() {
               </div>
             </div>
             <button 
-              onClick={handleGenerate}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleGenerate();
+              }}
               disabled={isGenerating}
-              className="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white font-black px-10 py-3 rounded-xl shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all transform active:scale-95 uppercase tracking-widest italic disabled:opacity-50 disabled:cursor-not-allowed h-fit self-center relative z-10"
+              className="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white font-black px-10 py-3 rounded-xl shadow-[0_0_25px_rgba(168,85,247,0.5)] transition-all transform active:scale-95 uppercase tracking-widest italic disabled:opacity-50 disabled:cursor-not-allowed h-fit self-center relative z-30"
             >
               {isGenerating ? "Manifesting..." : "Manifest"}
             </button>
@@ -826,8 +879,12 @@ export default function App() {
               <h3 className="text-base font-black text-white tracking-tighter italic uppercase">Alpha Passage</h3>
               <p className="text-[10px] text-purple-200 leading-tight mt-1 font-medium italic">Infinite AI manifestations & high-priority Stacks sequencing protocols.</p>
             </div>
-            <button className="w-full bg-white hover:bg-purple-200 text-black py-2.5 rounded-xl font-black text-[10px] uppercase tracking-tighter transition-all shadow-xl active:scale-95">
-              Upgrade — 25 STX / MO
+            <button 
+              onClick={handleSubscription}
+              className="w-full bg-white hover:bg-purple-200 text-black py-2.5 rounded-xl font-black text-[10px] uppercase tracking-tighter transition-all shadow-xl active:scale-95 flex items-center justify-between px-4"
+            >
+              <span>Subscribe (Monthly)</span>
+              <span className="bg-black/10 px-2 py-0.5 rounded">25 STX</span>
             </button>
           </div>
         </aside>
