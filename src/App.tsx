@@ -25,7 +25,7 @@ import confetti from 'canvas-confetti';
 import { AppConfig, UserSession, showConnect, authenticate, openSTXTransfer } from '@stacks/connect';
 import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 
-const DEFAULT_NETWORK = STACKS_TESTNET; // User explicitly requested testnet
+const DEFAULT_NETWORK = STACKS_TESTNET;
 const EXPLORER_URL = 'https://explorer.hiro.so';
 
 const TERMINAL_MESSAGES = [
@@ -84,6 +84,12 @@ export default function App() {
   const [showAbout, setShowAbout] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [isInIframe, setIsInIframe] = useState(false);
+
+  useEffect(() => {
+    setIsInIframe(window.self !== window.top);
+  }, []);
   const [cultTheme, setCultTheme] = useState('');
   const [customLogo, setCustomLogo] = useState<string | null>(null);
 
@@ -120,37 +126,36 @@ export default function App() {
   const appConfig = useMemo(() => new AppConfig(['store_write', 'publish_data']), []);
   const userSession = useMemo(() => new UserSession({ appConfig }), [appConfig]);
 
-  const [walletData, setWalletData] = useState<{
-    userData: any;
-    stxAddress: string;
-    walletConnected: boolean;
-  }>({
-    userData: null,
-    stxAddress: '',
-    walletConnected: false
-  });
+  const [userData, setUserData] = useState<any>(null);
+  const [stxAddress, setStxAddress] = useState<string>('');
+  const [walletConnected, setWalletConnected] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         if (userSession.isUserSignedIn()) {
-          const userData = userSession.loadUserData();
-          const stxAddress = userData?.profile?.stxAddress?.mainnet || userData?.profile?.stxAddress?.testnet || '';
-          setWalletData({
-            userData,
-            stxAddress,
-            walletConnected: true
-          });
+          const uData = userSession.loadUserData();
+          const address = useTestnet 
+            ? (uData?.profile?.stxAddress?.testnet || uData?.profile?.stxAddress?.mainnet || '')
+            : (uData?.profile?.stxAddress?.mainnet || uData?.profile?.stxAddress?.testnet || '');
+          setUserData(uData);
+          setStxAddress(address);
+          setWalletConnected(true);
+          
+          if (isInIframe && terminalLogs.length > 5) {
+            addTerminalLog("IFRAME_DETECTED: TRANSACTION_POPUP_MAY_VAPORIZE.");
+            addTerminalLog("SUGGESTION: RELAUNCH_IN_NEW_TAB_FOR_STABILITY.");
+          }
         } else if (userSession.isSignInPending()) {
           addTerminalLog("PROCESSING AUTH_RESPONSE...");
           try {
-            const userData = await userSession.handlePendingSignIn();
-            const stxAddress = userData?.profile?.stxAddress?.mainnet || userData?.profile?.stxAddress?.testnet || '';
-            setWalletData({
-              userData,
-              stxAddress,
-              walletConnected: true
-            });
+            const uData = await userSession.handlePendingSignIn();
+            const address = useTestnet 
+              ? (uData?.profile?.stxAddress?.testnet || uData?.profile?.stxAddress?.mainnet || '')
+              : (uData?.profile?.stxAddress?.mainnet || uData?.profile?.stxAddress?.testnet || '');
+            setUserData(uData);
+            setStxAddress(address);
+            setWalletConnected(true);
             addTerminalLog("AUTH_CORE: SECURE_SESSION_ESTABLISHED");
           } catch (err) {
             console.error("Pending sign-in error:", err);
@@ -164,27 +169,12 @@ export default function App() {
       }
     };
     checkAuth();
-  }, [userSession]);
-
-  const { userData, stxAddress, walletConnected } = walletData;
+  }, [userSession, useTestnet]);
 
   // Fetch real STX balance with auto-refresh
   useEffect(() => {
     if (walletConnected && stxAddress) {
-      // Show connection success only once per session
-      if (!sessionStorage.getItem('wallet_connected_announced')) {
-        addTerminalLog("WALLET CONNECTED: AUTHENTICATION SUCCESSFUL");
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.1, x: 0.9 }, // Top right near wallet
-          colors: ['#ffffff', '#a855f7']
-        });
-        sessionStorage.setItem('wallet_connected_announced', 'true');
-      }
-
       const getBalance = () => {
-        const networkSubpath = useTestnet ? 'testnet' : 'mainnet';
         const apiUrl = useTestnet ? 'https://api.testnet.hiro.so' : 'https://api.mainnet.hiro.so';
         fetch(`${apiUrl}/extended/v1/address/${stxAddress}/balances`)
           .then(res => res.json())
@@ -203,7 +193,7 @@ export default function App() {
       const interval = setInterval(getBalance, 30000); // Refresh every 30s
       return () => clearInterval(interval);
     }
-  }, [walletConnected, stxAddress]);
+  }, [walletConnected, stxAddress, useTestnet]);
 
   // Simulated terminal typing
   useEffect(() => {
@@ -219,7 +209,7 @@ export default function App() {
       } else {
         clearInterval(interval);
       }
-    }, 2000);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -321,45 +311,6 @@ export default function App() {
     });
   };
 
-  const handleSubscription = async () => {
-    if (!walletConnected) {
-      addTerminalLog("ERROR: AUTH_REQUIRED_FOR_SUBSCRIPTION");
-      connectWallet();
-      return;
-    }
-
-    addTerminalLog("INITIATING PREMIUM_GENESIS_ENROLLMENT [25 STX]...");
-
-    try {
-      if (typeof openSTXTransfer !== 'function') {
-        throw new Error("STX_TRANSFER_CORE_MISSING");
-      }
-
-      await openSTXTransfer({
-        network: useTestnet ? STACKS_TESTNET : STACKS_MAINNET,
-        recipient: stxAddress, // Use the connected wallet address
-        amount: '25000000', // 25 STX in microSTX
-        memo: 'CultOS Genesis Subscription',
-        onFinish: (data: { txId: string }) => {
-          const txId = data.txId;
-          addTerminalLog(`SUBSCRIPTION PAID. TXID: ${txId.slice(0, 12)}...`);
-          confetti({
-            particleCount: 150,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#a855f7', '#4ade80', '#ffffff']
-          });
-        },
-        onCancel: () => {
-          addTerminalLog("TRANSFER_CORE: USER_ABORTED");
-        }
-      });
-    } catch (err) {
-      addTerminalLog("ERROR: SUBSCRIPTION_BROADCAST_FAILED");
-      console.error(err);
-    }
-  };
-
   const handleGenerate = async () => {
     if (isGenerating) return;
     try {
@@ -371,19 +322,22 @@ export default function App() {
       const cult = await generateCultInfo(cultTheme);
       setGeneratedCult(cult);
       addTerminalLog(`NEW CULT DETECTED: ${cult.name}`);
-      addTerminalLog("CULT DATA TRANSMITTED TO INTERFACE.");
       
-      // Auto-generate logo if possible
-      addTerminalLog("INITIATING AI VISUAL SYNTHESIS...");
-      try {
-        const logoUrl = await generateCultLogo(cult.name, cult.slogan);
-        setCustomLogo(logoUrl);
-        addTerminalLog("VISUAL IDENTITY MANIFESTED.");
-      } catch (logoErr: any) {
-        console.error("Logo generation error:", logoErr);
-        addTerminalLog("VISUAL SYNTHESIS FAILURE: USING SYMBOLIC SEED.");
-        setCustomLogo(`https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(cult.name)}`);
-      }
+      // Auto-generate logo in background to speed up UI response
+      (async () => {
+        setIsGeneratingLogo(true);
+        addTerminalLog("INITIATING AI VISUAL SYNTHESIS...");
+        try {
+          const logoUrl = await generateCultLogo(cult.name, cult.slogan);
+          setCustomLogo(logoUrl);
+          addTerminalLog("VISUAL IDENTITY MANIFESTED.");
+        } catch (logoErr: any) {
+          addTerminalLog("VISUAL SYNTHESIS FAILURE: USING SYMBOLIC SEED.");
+          setCustomLogo(`https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(cult.name)}`);
+        } finally {
+          setIsGeneratingLogo(false);
+        }
+      })();
 
       confetti({
         particleCount: 150,
@@ -418,14 +372,21 @@ export default function App() {
         throw new Error("STX_TRANSFER_CORE_MISSING");
       }
 
+      const recipient = useTestnet 
+        ? 'STQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF' 
+        : 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF';
+
+      const network = useTestnet ? STACKS_TESTNET : STACKS_MAINNET;
+
       await openSTXTransfer({
-        network: useTestnet ? STACKS_TESTNET : STACKS_MAINNET,
-        recipient: 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF', // Updated fee collection address
+        network,
+        recipient,
         amount: '100000', // 0.1 STX in microstacks
-        memo: `Launch ${generatedCult.symbol}`,
+        memo: "CultOS Manifestation",
         appDetails: {
           name: 'CultOS',
           icon: window.location.origin + '/favicon.ico',
+          description: 'Manifest your internet religion on Stacks.',
         },
         onFinish: (data: any) => {
           setIsTransferring(false);
@@ -435,21 +396,27 @@ export default function App() {
           } else {
             addTerminalLog("FEE PAID. TRANSACTION BROADCASTED.");
           }
-          setTimeout(() => {
-            if (generatedCult) {
-              addTerminalLog(`CULT MANIFESTED ON MAINNET: ${generatedCult.name}`);
-            }
-          }, 1000);
-          confetti();
+          
+          if (generatedCult) {
+            addTerminalLog(`CULT MANIFESTED ON ${useTestnet ? 'TESTNET' : 'MAINNET'}: ${generatedCult.name}`);
+          }
+          setShowSuccess(true);
+          confetti({
+            particleCount: 200,
+            spread: 120,
+            origin: { y: 0.5 },
+            colors: ['#a855f7', '#22c55e', '#ffffff', '#fbbf24']
+          });
         },
         onCancel: () => {
           setIsTransferring(false);
           addTerminalLog("TRANSACTION CANCELED BY USER");
         },
       });
-    } catch (e) {
+    } catch (e: any) {
+      console.error("Transaction error:", e);
+      addTerminalLog(`TRANSACTION ERROR: ${e?.message || "REJECTED"}`);
       setIsTransferring(false);
-      addTerminalLog("TRANSACTION FAILED");
     }
   };
 
@@ -486,6 +453,79 @@ export default function App() {
 
   return (
     <div className="h-screen w-full bg-[#050505] text-gray-300 font-sans flex flex-col overflow-hidden selection:bg-purple-500/30">
+      {/* Success Manifestation Modal */}
+      <AnimatePresence>
+        {showSuccess && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl"
+          >
+            <motion.div 
+              initial={{ scale: 0.8, y: 50, rotate: -2 }}
+              animate={{ scale: 1, y: 0, rotate: 0 }}
+              className="bg-zinc-900 border-2 border-green-500/50 p-10 rounded-[3rem] w-full max-w-lg shadow-[0_0_100px_rgba(34,197,94,0.3)] relative overflow-hidden text-center"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
+              
+              <motion.div 
+                animate={{ 
+                  scale: [1, 1.2, 1],
+                  rotate: [0, 10, -10, 0]
+                }}
+                transition={{ duration: 4, repeat: Infinity }}
+                className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-500/40"
+              >
+                <Zap className="w-12 h-12 text-green-400 fill-green-400/20" />
+              </motion.div>
+
+              <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-2 italic">
+                Manifestation Complete
+              </h2>
+              <p className="text-green-400 font-mono text-sm tracking-widest mb-8 uppercase">
+                {generatedCult?.name} has entered the memetic layer
+              </p>
+
+              <div className="bg-black/50 border border-white/10 p-6 rounded-2xl mb-8 space-y-3 text-left">
+                <div className="flex justify-between text-xs font-mono">
+                  <span className="text-zinc-500">SYMBOL</span>
+                  <span className="text-white font-bold">{generatedCult?.symbol}</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono">
+                  <span className="text-zinc-500">NETWORK</span>
+                  <span className="text-purple-400 font-bold">{useTestnet ? 'Stacks Testnet' : 'Stacks Mainnet'}</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono">
+                  <span className="text-zinc-500">STATUS</span>
+                  <span className="text-green-400 font-bold animate-pulse">VIRAL_READY</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => setShowTemplate(true)}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                >
+                  <ScrollText className="w-4 h-4" />
+                  View Code
+                </button>
+                <button 
+                  onClick={() => setShowSuccess(false)}
+                  className="bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs shadow-lg shadow-green-900/20"
+                >
+                  Continue
+                </button>
+              </div>
+              
+              <p className="mt-6 text-[10px] text-zinc-500 font-mono uppercase tracking-tighter text-center">
+                Copy the code and deploy via Stacks Explorer to finalize the ritual.
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Templates Modal */}
       <AnimatePresence>
         {showTemplate && (
@@ -1046,6 +1086,7 @@ export default function App() {
 
         {/* Right Sidebar: Leaderboard & Premium */}
         <aside className="w-full lg:w-72 flex flex-col sm:flex-row lg:flex-col gap-4 shrink-0 pb-10 lg:pb-0">
+
           {/* Leaderboard */}
           <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col overflow-hidden shadow-lg backdrop-blur-sm min-h-[300px] sm:min-h-0">
             <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4 flex items-center justify-between">
@@ -1080,22 +1121,6 @@ export default function App() {
           </div>
 
           {/* Premium Upsell */}
-          <div className="h-44 bg-gradient-to-br from-purple-600/30 to-blue-600/30 border border-purple-500/40 rounded-2xl p-6 flex flex-col justify-between shadow-2xl relative overflow-hidden group">
-            <div className="absolute -top-4 -right-4 opacity-10 scale-150 rotate-12 group-hover:rotate-0 transition-transform duration-700">
-              <Zap className="w-24 h-24 text-white" />
-            </div>
-            <div className="relative z-10">
-              <h3 className="text-base font-black text-white tracking-tighter italic uppercase">Alpha Passage</h3>
-              <p className="text-[10px] text-purple-200 leading-tight mt-1 font-medium italic">Infinite AI manifestations & high-priority Stacks sequencing protocols.</p>
-            </div>
-            <button 
-              onClick={handleSubscription}
-              className="w-full bg-white hover:bg-purple-200 text-black py-2.5 rounded-xl font-black text-[10px] uppercase tracking-tighter transition-all shadow-xl active:scale-95 flex items-center justify-between px-4"
-            >
-              <span>Subscribe (Monthly)</span>
-              <span className="bg-black/10 px-2 py-0.5 rounded">25 STX</span>
-            </button>
-          </div>
         </aside>
       </main>
 
