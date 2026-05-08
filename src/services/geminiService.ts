@@ -92,21 +92,32 @@ export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
 export async function generateCultLogo(name: string, slogan: string): Promise<string> {
   const ai = getAI();
   try {
-    const response = await ai.models.generateImages({
-      model: 'imagen-3.0-generate-001',
-      prompt: `Create a minimalist, flat design crypto token logo for a cult called "${name}". 
-      Slogan: "${slogan}". 
-      Style: modern, clean, vector-style icon, centered, solid background, high contrast, cyberpunk or esoteric aesthetic. 
-      No text in the logo itself. Just a symbolic representation.`,
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          {
+            text: `Create a minimalist, flat design crypto token logo for a cult called "${name}". 
+            Slogan: "${slogan}". 
+            Style: modern, clean, vector-style icon, centered, solid background, high contrast, cyberpunk or esoteric aesthetic. 
+            No text in the logo itself. Just a symbolic representation.`,
+          },
+        ],
+      },
       config: {
-        numberOfImages: 1,
-        aspectRatio: '1:1',
-        outputMimeType: 'image/jpeg',
+        imageConfig: {
+          aspectRatio: "1:1",
+        },
       },
     });
 
-    if (response.generatedImages && response.generatedImages.length > 0) {
-      return `data:image/jpeg;base64,${response.generatedImages[0].image.imageBytes}`;
+    // Extracting image part as per skill
+    if (response.candidates && response.candidates[0].content.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
     }
 
     throw new Error("No image data returned from Gemini");

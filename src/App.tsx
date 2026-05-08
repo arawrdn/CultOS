@@ -37,6 +37,39 @@ const TERMINAL_MESSAGES = [
   "DEGEN LEVEL CRITICAL: READY.",
 ];
 
+const TUTORIAL_STEPS = [
+  {
+    title: "Welcome to CultOS",
+    description: "Your portal to the memetic consensus layer on Bitcoin. Let's manifest your first digital movement.",
+    targetId: null,
+  },
+  {
+    title: "The Neural Core",
+    description: "Enter a theme for your new cult (e.g. 'Cyber Cats') and manifest it through AI.",
+    targetId: 'cult-theme-input',
+  },
+  {
+    title: "System Terminal",
+    description: "Monitor real-time AI processing and internet signal analysis in the system log.",
+    targetId: 'system-terminal',
+  },
+  {
+    title: "Visual Identity",
+    description: "Generate AI-powered logos or upload your own sacred icons to the neural core.",
+    targetId: 'cult-logo-area',
+  },
+  {
+    title: "Stacks Auth",
+    description: "Connect your Stacks wallet to authenticate and track your STX balance.",
+    targetId: 'wallet-connect-button',
+  },
+  {
+    title: "Blockchain Bridge",
+    description: "Ready to go viral? Deploy your cult blueprint directly to the Stacks network.",
+    targetId: 'manifestation-deploy-button',
+  },
+];
+
 export default function App() {
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -45,6 +78,8 @@ export default function App() {
   const [stxBalance, setStxBalance] = useState<string>('0.00');
   const [useTestnet, setUseTestnet] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
   const [showTemplate, setShowTemplate] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -190,6 +225,12 @@ export default function App() {
 
   // Detect available wallet protocols
   useEffect(() => {
+    // Check if user has seen tutorial
+    const hasSeenTutorial = localStorage.getItem('cultos_tutorial_seen');
+    if (!hasSeenTutorial) {
+      setTimeout(() => setShowTutorial(true), 3000);
+    }
+
     const detectProtocols = () => {
       const protocols = [];
       if (typeof window !== 'undefined') {
@@ -258,6 +299,19 @@ export default function App() {
   const disconnectWallet = () => {
     userSession.signUserOut();
     window.location.reload();
+  };
+
+  const skipTutorial = () => {
+    setShowTutorial(false);
+    localStorage.setItem('cultos_tutorial_seen', 'true');
+  };
+
+  const nextTutorialStep = () => {
+    if (tutorialStep < 5) {
+      setTutorialStep(tutorialStep + 1);
+    } else {
+      skipTutorial();
+    }
   };
 
   const addTerminalLog = (msg: string) => {
@@ -557,6 +611,97 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Tutorial Overlay */}
+      <AnimatePresence>
+        {showTutorial && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] overflow-hidden pointer-events-none"
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+            
+            {/* Spotlight Effect */}
+            {tutorialStep > 0 && TUTORIAL_STEPS[tutorialStep].targetId && (
+              <motion.div 
+                layoutId="spotlight"
+                initial={false}
+                animate={{
+                  ...(() => {
+                    const el = document.getElementById(TUTORIAL_STEPS[tutorialStep].targetId as string);
+                    if (!el) return { opacity: 0 };
+                    const rect = el.getBoundingClientRect();
+                    return {
+                      x: rect.left - 8,
+                      y: rect.top - 8,
+                      width: rect.width + 16,
+                      height: rect.height + 16,
+                      opacity: 1
+                    };
+                  })()
+                }}
+                className="absolute border-2 border-purple-500 rounded-xl shadow-[0_0_30px_rgba(168,85,247,0.5)] bg-purple-500/5 pointer-events-none"
+              />
+            )}
+
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <motion.div 
+                key={tutorialStep}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-zinc-900 border border-purple-500/40 p-8 rounded-3xl w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] pointer-events-auto relative mt-20"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex gap-1">
+                    {TUTORIAL_STEPS.map((_, i) => (
+                      <div 
+                        key={i} 
+                        className={cn(
+                          "w-1.5 h-1.5 rounded-full transition-colors",
+                          i === tutorialStep ? "bg-purple-500" : "bg-zinc-800"
+                        )} 
+                      />
+                    ))}
+                  </div>
+                  <button 
+                    onClick={skipTutorial}
+                    className="text-[10px] uppercase font-black text-zinc-500 hover:text-white tracking-widest transition-colors"
+                  >
+                    Skip
+                  </button>
+                </div>
+
+                <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-2 italic">
+                  {TUTORIAL_STEPS[tutorialStep].title}
+                </h3>
+                <p className="text-sm text-gray-400 leading-relaxed mb-8">
+                  {TUTORIAL_STEPS[tutorialStep].description}
+                </p>
+
+                <div className="flex gap-3">
+                  {tutorialStep > 0 && (
+                    <button 
+                      onClick={() => setTutorialStep(tutorialStep - 1)}
+                      className="flex-1 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-widest transition-all"
+                    >
+                      Back
+                    </button>
+                  )}
+                  <button 
+                    onClick={nextTutorialStep}
+                    className="flex-[2] px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-widest transition-all shadow-lg"
+                  >
+                    {tutorialStep === TUTORIAL_STEPS.length - 1 ? "Start Manifesting" : "Next Protocol"}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="min-h-16 lg:h-16 border-b border-white/10 bg-black/90 lg:bg-black/40 backdrop-blur-md flex items-center justify-between px-4 lg:px-6 z-[100] shrink-0 relative py-2 lg:py-0">
         <div className="flex items-center gap-3">
@@ -596,6 +741,7 @@ export default function App() {
               </div>
               <div className="flex items-center gap-2">
                 <a 
+                  id="wallet-info-button"
                   href={`${EXPLORER_URL}/address/${stxAddress}?chain=${useTestnet ? 'testnet' : 'mainnet'}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -620,6 +766,7 @@ export default function App() {
             </div>
           ) : (
             <button 
+              id="wallet-connect-button"
               onClick={connectWallet}
               className="bg-white text-black px-5 lg:px-6 py-2.5 lg:py-2 rounded-full font-bold text-xs lg:text-sm hover:bg-purple-400 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center gap-2 relative z-[102]"
             >
@@ -636,7 +783,7 @@ export default function App() {
         {/* Left Sidebar: Terminal & Stats */}
         <aside className="w-full lg:w-72 flex lg:flex-col gap-4 overflow-hidden shrink-0">
           {/* Terminal */}
-          <div className="flex-[2] bg-black/60 border border-purple-500/30 rounded-xl p-4 font-mono text-[11px] relative overflow-hidden flex flex-col shadow-[inset_0_0_20px_rgba(168,85,247,0.1)] min-h-[150px] lg:min-h-0">
+          <div id="system-terminal" className="flex-[2] bg-black/60 border border-purple-500/30 rounded-xl p-4 font-mono text-[11px] relative overflow-hidden flex flex-col shadow-[inset_0_0_20px_rgba(168,85,247,0.1)] min-h-[150px] lg:min-h-0">
             <div className="absolute top-0 left-0 w-full h-0.5 bg-purple-500/50 shadow-[0_0_10px_#a855f7]"></div>
             <div className="text-green-400 mb-2 font-bold tracking-tight">[SYS] INITIALIZING_CULT_ENGINE...</div>
             <div className="flex-1 space-y-1 overflow-hidden">
@@ -707,6 +854,7 @@ export default function App() {
               <div className="flex items-center gap-4 mt-2">
                 <div className="relative w-full sm:w-64">
                   <input 
+                    id="cult-theme-input"
                     type="text"
                     value={cultTheme}
                     onChange={(e) => setCultTheme(e.target.value)}
@@ -721,6 +869,7 @@ export default function App() {
               </div>
             </div>
             <button 
+              id="manifest-button"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -752,6 +901,7 @@ export default function App() {
                 <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start flex-1 overflow-y-auto scrollbar-none pr-1">
                   {/* Visual Preview */}
                   <div 
+                    id="cult-logo-area"
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full md:w-64 aspect-square rounded-2xl bg-gradient-to-br from-zinc-900 to-black border-2 border-purple-500/30 flex items-center justify-center overflow-hidden relative shrink-0 shadow-2xl group/img cursor-pointer"
                   >
@@ -880,6 +1030,7 @@ export default function App() {
                       SIP-010 TEMPLATE
                     </button>
                     <button 
+                      id="manifestation-deploy-button"
                       onClick={handleLaunch}
                       disabled={isTransferring}
                       className="px-10 py-3 rounded-xl bg-green-500 hover:bg-green-400 text-black text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_25px_rgba(34,197,94,0.5)] transform active:scale-95 disabled:opacity-50"
