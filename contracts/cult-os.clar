@@ -1,63 +1,55 @@
-;; CultOS Registry Contract
-;; Version: 2.0
-;; This contract stores memetic cult records and handles registration fees.
+;; CultOS Token - SIP010 Standard
+(impl-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
-(define-constant ERR_UNAUTHORIZED (err u401))
-(define-constant ERR_INVALID_PARAMS (err u400))
-(define-constant OWNER tx-sender)
-(define-constant REGISTRATION_FEE u25000000) ;; 25 STX
+(define-constant ERR-UNAUTHORIZED (err u100))
 
-(define-map registry
-  { id: uint }
-  {
-    name: (string-ascii 64),
-    owner: principal,
-    height: uint,
-    uri: (string-ascii 256)
-  }
-)
+;; Supply: 21,000,000 * 10^6 desimal = u21000000000000
+(define-fungible-token cult-os u21000000000000)
 
-(define-data-var cursor uint u0)
+(define-constant TOKEN-NAME "CultOS")
+(define-constant TOKEN-SYMBOL "CultOS")
+(define-constant TOKEN-URI (some u"https://raw.githubusercontent.com/arawrdn/CultOS/refs/heads/main/CultOS_Logo.png"))
+(define-constant TOKEN-DECIMALS u6)
 
-;; Public Functions
+;; --- Public Functions ---
 
-(define-public (register (name (string-ascii 64)) (uri (string-ascii 256)))
-  (let
-    (
-      (next-id (+ (var-get cursor) u1))
-      (contract-address (as-contract tx-sender))
+(define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
+    (begin
+        (asserts! (is-eq tx-sender sender) ERR-UNAUTHORIZED)
+        (try! (ft-transfer? cult-os amount sender recipient))
+        (match memo to-print (print to-print) 0)
+        (ok true)
     )
-    ;; Transfer STX to this contract's principal
-    (try! (stx-transfer? REGISTRATION_FEE tx-sender contract-address))
-    
-    (map-set registry
-      { id: next-id }
-      {
-        name: name,
-        owner: tx-sender,
-        height: block-height,
-        uri: uri
-      }
-    )
-    (var-set cursor next-id)
-    (ok next-id)
-  )
 )
 
-(define-public (withdraw (amount uint) (recipient principal))
-  (begin
-    (asserts! (is-eq tx-sender OWNER) ERR_UNAUTHORIZED)
-    (as-contract (stx-transfer? amount tx-sender recipient))
-  )
+;; --- Read Only Functions ---
+
+(define-read-only (get-name)
+    (ok TOKEN-NAME)
 )
 
-;; Read-only Functions
-
-(define-read-only (get-entry (id uint))
-  (map-get? registry { id: id })
+(define-read-only (get-symbol)
+    (ok TOKEN-SYMBOL)
 )
 
-(define-read-only (get-cursor)
-  (ok (var-get cursor))
+(define-read-only (get-decimals)
+    (ok TOKEN-DECIMALS)
 )
 
+(define-read-only (get-balance (who principal))
+    (ok (ft-get-balance cult-os who))
+)
+
+(define-read-only (get-total-supply)
+    (ok (ft-get-supply cult-os))
+)
+
+(define-read-only (get-token-uri)
+    (ok TOKEN-URI)
+)
+
+;; --- Minting (Seluruh supply dicetak ke deployer saat deploy) ---
+
+(begin
+    (try! (ft-mint? cult-os u21000000000000 tx-sender))
+)
