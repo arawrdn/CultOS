@@ -1,6 +1,6 @@
-# 🧿 CultOS: Viral Consensus Architect
+# 🧿 CULT-GEN: Viral Consensus Architect
 
-**CultOS** is a decentralized "cult-as-a-service" platform built on the Stacks blockchain. It leverages generative AI to manifest viral consensus layers (tokens) by synthesizing lore, branding, and economic blueprints directly from the cultural zeitgeist.
+**CULT-GEN** is a decentralized "cult-as-a-service" platform built on the Stacks blockchain. It leverages generative AI to manifest viral consensus layers (tokens) by synthesizing lore, branding, and economic blueprints directly from the cultural zeitgeist.
 
 ![License](https://img.shields.io/badge/license-MIT-purple)
 ![Stacks](https://img.shields.io/badge/chain-Stacks-orange)
@@ -9,7 +9,7 @@
 ---
 
 ## ⚡ The Vision
-Traditional token launches lack soul. CultOS replaces generic whitepapers with "AI-Generated Manifestos," using LLMs to craft deep lore, viral slogans, and risk-calibrated tokenomics. It’s not just a token; it’s a movement.
+Traditional token launches lack soul. CULT-GEN replaces generic whitepapers with "AI-Generated Manifestos," using LLMs to craft deep lore, viral slogans, and risk-calibrated tokenomics. It’s not just a token; it’s a movement.
 
 ## 🛠 Features
 

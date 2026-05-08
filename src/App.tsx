@@ -23,7 +23,10 @@ import { cn } from './lib/utils';
 import { generateCultInfo, generateCultLogo, type CultInfo } from './services/geminiService';
 import confetti from 'canvas-confetti';
 import { AppConfig, UserSession, showConnect, authenticate, openSTXTransfer } from '@stacks/connect';
-import { STACKS_MAINNET } from '@stacks/network';
+import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
+
+const DEFAULT_NETWORK = STACKS_TESTNET; // User explicitly requested testnet
+const EXPLORER_URL = 'https://explorer.hiro.so';
 
 const TERMINAL_MESSAGES = [
   "SCANNING INTERNET RELIGION...",
@@ -40,6 +43,8 @@ export default function App() {
   const [isGeneratingLogo, setIsGeneratingLogo] = useState(false);
   const [generatedCult, setGeneratedCult] = useState<CultInfo | null>(null);
   const [stxBalance, setStxBalance] = useState<string>('0.00');
+  const [useTestnet, setUseTestnet] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showTemplate, setShowTemplate] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -144,7 +149,9 @@ export default function App() {
       }
 
       const getBalance = () => {
-        fetch(`https://api.mainnet.hiro.so/extended/v1/address/${stxAddress}/balances`)
+        const networkSubpath = useTestnet ? 'testnet' : 'mainnet';
+        const apiUrl = useTestnet ? 'https://api.testnet.hiro.so' : 'https://api.mainnet.hiro.so';
+        fetch(`${apiUrl}/extended/v1/address/${stxAddress}/balances`)
           .then(res => res.json())
           .then(data => {
             if (data.stx) {
@@ -154,7 +161,6 @@ export default function App() {
           })
           .catch((err) => {
             console.error("Balance fetch error:", err);
-            // Don't overwrite current balance on temporary network error
           });
       };
 
@@ -276,7 +282,7 @@ export default function App() {
       }
 
       await openSTXTransfer({
-        network: STACKS_MAINNET,
+        network: useTestnet ? STACKS_TESTNET : STACKS_MAINNET,
         recipient: stxAddress, // Use the connected wallet address
         amount: '25000000', // 25 STX in microSTX
         memo: 'CultOS Genesis Subscription',
@@ -302,14 +308,29 @@ export default function App() {
 
   const handleGenerate = async () => {
     if (isGenerating) return;
-    setIsGenerating(true);
-    setCustomLogo(null);
-    addTerminalLog(cultTheme ? `INITIATING AI CULT SEQUENCER FOR: ${cultTheme.toUpperCase()}...` : "INITIATING AI CULT SEQUENCER...");
     try {
+      setIsGenerating(true);
+      setError(null);
+      setCustomLogo(null);
+      addTerminalLog(cultTheme ? `INITIATING AI CULT SEQUENCER FOR: ${cultTheme.toUpperCase()}...` : "INITIATING AI CULT SEQUENCER...");
+      
       const cult = await generateCultInfo(cultTheme);
       setGeneratedCult(cult);
       addTerminalLog(`NEW CULT DETECTED: ${cult.name}`);
       addTerminalLog("CULT DATA TRANSMITTED TO INTERFACE.");
+      
+      // Auto-generate logo if possible
+      addTerminalLog("INITIATING AI VISUAL SYNTHESIS...");
+      try {
+        const logoUrl = await generateCultLogo(cult.name, cult.slogan);
+        setCustomLogo(logoUrl);
+        addTerminalLog("VISUAL IDENTITY MANIFESTED.");
+      } catch (logoErr: any) {
+        console.error("Logo generation error:", logoErr);
+        addTerminalLog("VISUAL SYNTHESIS FAILURE: USING SYMBOLIC SEED.");
+        setCustomLogo(`https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(cult.name)}`);
+      }
+
       confetti({
         particleCount: 150,
         spread: 90,
@@ -318,7 +339,9 @@ export default function App() {
       });
     } catch (error: any) {
       console.error("AI Sequential error:", error);
-      addTerminalLog("AI SEQUENCER FAILURE: " + (error?.message || "Unknown error"));
+      const msg = error?.message || "Unknown error";
+      addTerminalLog("AI SEQUENCER FAILURE: " + msg);
+      setError("AI Generation Error: " + msg);
     } finally {
       setIsGenerating(false);
     }
@@ -342,7 +365,7 @@ export default function App() {
       }
 
       await openSTXTransfer({
-        network: STACKS_MAINNET,
+        network: useTestnet ? STACKS_TESTNET : STACKS_MAINNET,
         recipient: 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF', // Updated fee collection address
         amount: '100000', // 0.1 STX in microstacks
         memo: `Launch ${generatedCult.symbol}`,
@@ -377,11 +400,12 @@ export default function App() {
   };
 
   const sip010Template = `;; SIP-010: Standard Trait for Fungible Tokens
+;; Optimized for Clarity 2.0
 (impl-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
 (define-fungible-token ${generatedCult?.symbol || 'token'})
 
-(define-constant contract-owner tx-sender)
+(define-constant CONTRACT_OWNER tx-sender)
 
 (define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
   (begin
@@ -395,7 +419,16 @@ export default function App() {
   (ok "${generatedCult?.symbol || 'TKN'}"))
 
 (define-read-only (get-decimals)
-  (ok u6))`;
+  (ok u6))
+
+(define-read-only (get-balance (user principal))
+  (ok (ft-get-balance ${generatedCult?.symbol || 'token'} user)))
+
+(define-read-only (get-total-supply)
+  (ok (ft-get-supply ${generatedCult?.symbol || 'token'})))
+
+(define-read-only (get-token-uri)
+  (ok none))`;
 
   return (
     <div className="h-screen w-full bg-[#050505] text-gray-300 font-sans flex flex-col overflow-hidden selection:bg-purple-500/30">
@@ -531,7 +564,22 @@ export default function App() {
             <span className="text-black font-black text-xl">Ω</span>
           </div>
           <span className="text-lg lg:text-2xl font-bold tracking-tighter text-white uppercase">Cult<span className="text-purple-500">OS</span></span>
-          <span className="hidden sm:inline text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded border border-green-500/30 font-mono ml-2 uppercase">Mainnet</span>
+          <button 
+            onClick={() => setUseTestnet(!useTestnet)}
+            className={cn(
+              "group flex items-center gap-2 text-[10px] px-3 py-1 rounded-full border font-mono ml-4 uppercase transition-all duration-300 shadow-sm active:scale-95",
+              useTestnet 
+                ? "bg-orange-500/10 text-orange-400 border-orange-500/30 hover:bg-orange-500/20 hover:border-orange-500/50" 
+                : "bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20 hover:border-green-500/50"
+            )}
+            title={`Switch to ${useTestnet ? 'Mainnet' : 'Testnet'}`}
+          >
+            <div className={cn(
+              "w-1.5 h-1.5 rounded-full animate-pulse shadow-[0_0_8px_currentColor]",
+              useTestnet ? "bg-orange-400" : "bg-green-400"
+            )} />
+            <span className="font-bold">{useTestnet ? 'Testnet' : 'Mainnet'}</span>
+          </button>
         </div>
         
         <div className="flex items-center gap-4 lg:gap-6 relative z-[101]">
@@ -548,7 +596,7 @@ export default function App() {
               </div>
               <div className="flex items-center gap-2">
                 <a 
-                  href={`https://explorer.hiro.so/address/${stxAddress}?chain=mainnet`}
+                  href={`${EXPLORER_URL}/address/${stxAddress}?chain=${useTestnet ? 'testnet' : 'mainnet'}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 lg:px-4 py-2 rounded-full font-bold text-xs lg:text-sm transition-colors border border-white/5"
