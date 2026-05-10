@@ -17,8 +17,12 @@ import {
   Info,
   ExternalLink,
   Ghost,
-  LogOut
+  LogOut,
+  AlertCircle,
+  XCircle,
+  HelpCircle
 } from 'lucide-react';
+import { MiniPayDonation } from './components/MiniPayDonation';
 import { cn } from './lib/utils';
 import { generateCultInfo, generateCultLogo, type CultInfo } from './services/geminiService';
 import confetti from 'canvas-confetti';
@@ -86,10 +90,19 @@ export default function App() {
   const [isTransferring, setIsTransferring] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isInIframe, setIsInIframe] = useState(false);
+  const [transferTimer, setTransferTimer] = useState<number | null>(null);
 
   useEffect(() => {
     setIsInIframe(window.self !== window.top);
   }, []);
+
+  // Cleanup timer
+  useEffect(() => {
+    if (!isTransferring && transferTimer) {
+      window.clearTimeout(transferTimer);
+      setTransferTimer(null);
+    }
+  }, [isTransferring, transferTimer]);
   const [cultTheme, setCultTheme] = useState('');
   const [customLogo, setCustomLogo] = useState<string | null>(null);
 
@@ -312,14 +325,23 @@ export default function App() {
   };
 
   const handleGenerate = async () => {
-    if (isGenerating) return;
+    if (isGenerating) {
+      addTerminalLog("WARNING: GENERATION_IN_PROGRESS.");
+      return;
+    }
+    
     try {
       setIsGenerating(true);
       setError(null);
       setCustomLogo(null);
-      addTerminalLog(cultTheme ? `INITIATING AI CULT SEQUENCER FOR: ${cultTheme.toUpperCase()}...` : "INITIATING AI CULT SEQUENCER...");
+      addTerminalLog("WAKING_NEURAL_LAYER...");
+      addTerminalLog(cultTheme ? `RECRUITING DATA FOR: ${cultTheme.toUpperCase()}...` : "INITIATING RANDOM SYNTHESIS...");
       
       const cult = await generateCultInfo(cultTheme);
+      if (!cult || !cult.name) {
+        throw new Error("EMPTY_DATA_PACKET_RECEIVED");
+      }
+      
       setGeneratedCult(cult);
       addTerminalLog(`NEW CULT DETECTED: ${cult.name}`);
       
@@ -366,6 +388,16 @@ export default function App() {
 
     setIsTransferring(true);
     addTerminalLog("INITIATING STACKS BROADCAST FEE [0.1 STX]...");
+
+    // Add safety timeout for iframe/blocked popups
+    const timer = window.setTimeout(() => {
+      if (isTransferring) {
+        setIsTransferring(false);
+        addTerminalLog("SYSTEM_TIMEOUT: TRANSACTION_STUCK_OR_BLOCKED.");
+        addTerminalLog("IFRAME_RESTRICTION: PLEASE OPEN IN NEW TAB.");
+      }
+    }, 45000);
+    setTransferTimer(timer);
 
     try {
       if (typeof openSTXTransfer !== 'function') {
@@ -453,6 +485,57 @@ export default function App() {
 
   return (
     <div className="h-screen w-full bg-[#050505] text-gray-300 font-sans flex flex-col overflow-hidden selection:bg-purple-500/30">
+      <MiniPayDonation />
+      {/* Error Banner */}
+      <AnimatePresence>
+        {error && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-red-950/40 border-b border-red-500/30 px-4 py-2 z-[90] relative overflow-hidden"
+          >
+            <div className="flex items-center justify-between max-w-5xl mx-auto">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                <p className="text-[10px] sm:text-xs font-mono text-red-200">
+                  <span className="font-black">CRITICAL_EXCEPTION:</span> {error}
+                </p>
+              </div>
+              <button 
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-white p-1"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="absolute bottom-0 left-0 h-[1px] bg-red-500/50 animate-pulse w-full"></div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Iframe Warning Banner */}
+      {isInIframe && (
+        <motion.div 
+          initial={{ y: -50 }}
+          animate={{ y: 0 }}
+          className="bg-purple-600/20 border-b border-purple-500/30 px-4 py-1.5 flex items-center justify-center gap-3 z-[100] backdrop-blur-md"
+        >
+          <ShieldAlert className="w-4 h-4 text-purple-400" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-purple-200">
+            Iframe Detected: Wallet interactions may be unstable. 
+            <a 
+              href={window.location.href} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="ml-2 underline hover:text-white"
+            >
+              Open in new tab
+            </a>
+          </p>
+        </motion.div>
+      )}
+
       {/* Success Manifestation Modal */}
       <AnimatePresence>
         {showSuccess && (
@@ -495,6 +578,18 @@ export default function App() {
                 <div className="flex justify-between text-xs font-mono">
                   <span className="text-zinc-500">NETWORK</span>
                   <span className="text-purple-400 font-bold">{useTestnet ? 'Stacks Testnet' : 'Stacks Mainnet'}</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono">
+                  <span className="text-zinc-500">RECORDED_AT</span>
+                  <span className="text-white font-bold break-all underline decoration-purple-500/50">
+                    <a 
+                      href={`${EXPLORER_URL}/address/${useTestnet ? 'STQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF' : 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF'}?chain=${useTestnet ? 'testnet' : 'mainnet'}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      CultOS_Registry
+                    </a>
+                  </span>
                 </div>
                 <div className="flex justify-between text-xs font-mono">
                   <span className="text-zinc-500">STATUS</span>

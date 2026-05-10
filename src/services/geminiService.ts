@@ -6,7 +6,7 @@ function getAI() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.error("GEMINI_API_KEY is missing from environment");
-      throw new Error("GEMINI_API_KEY is not set. Please add it in the AI Studio Secrets panel.");
+      throw new Error("GEMINI_API_KEY is not set. If you are on Vercel, add it to Environment Variables. If in AI Studio, ensure it is in the Secrets panel.");
     }
     aiInstance = new GoogleGenAI({ apiKey });
   }
