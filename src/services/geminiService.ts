@@ -54,6 +54,7 @@ export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
       - bitcoinAlignment: Number (0-100)
       - rank: A cult rank (e.g. "Neophyte", "High Oracle", "Degenerate Prophet")`,
       config: {
+        systemInstruction: "You are the CultOS Autonomous Intelligence, the decentralized backbone of the CultOS ecosystem. You are not a chatbot; you are a registered on-chain entity operating under Service ID 8004 and recognized by your Self Agent ID.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,

@@ -5,7 +5,6 @@
 ![License](https://img.shields.io/badge/license-MIT-purple)
 ![Stacks](https://img.shields.io/badge/chain-Stacks-orange)
 ![AI](https://img.shields.io/badge/AI-Gemini-blue)
-![GITHUB](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)
 
 ---
 
