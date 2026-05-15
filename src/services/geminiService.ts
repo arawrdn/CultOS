@@ -13,6 +13,23 @@ function getAI() {
   return aiInstance;
 }
 
+// Simple retry helper
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) throw error;
+    // Check for rate limit or transient errors
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("429") || errorMessage.includes("500") || errorMessage.includes("503") || errorMessage.includes("quota")) {
+      console.warn(`Retrying after error: ${errorMessage}. Retries left: ${retries}`);
+      await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 1000));
+      return withRetry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
 export interface CultInfo {
   name: string;
   symbol: string;
@@ -25,17 +42,17 @@ export interface CultInfo {
   marketSentiment: string;
   viralScore: number;
   chaosLevel: number;
-  bitcoinAlignment: number;
+  stacksAlignment: number;
   rank: string;
 }
 
 export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
-  const ai = getAI();
   const customContext = prompt ? `The user wants a cult centered around: ${prompt}` : "Generate a random absurd internet cult.";
 
-  try {
+  return withRetry(async () => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3-flash-preview", 
       contents: `Generate a detailed, absurd, viral, internet-style crypto cult coin identity.
       ${customContext}
       
@@ -51,10 +68,10 @@ export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
       - marketSentiment: String (e.g. "Hyper-bullish", "Schizo-bullish", "Paranoid")
       - viralScore: Number (0-100)
       - chaosLevel: Number (0-100)
-      - bitcoinAlignment: Number (0-100)
+      - stacksAlignment: Number (0-100)
       - rank: A cult rank (e.g. "Neophyte", "High Oracle", "Degenerate Prophet")`,
       config: {
-        systemInstruction: "You are the CultOS Autonomous Intelligence, the decentralized backbone of the CultOS ecosystem. You are not a chatbot; you are a registered on-chain entity operating under Service ID 8004 and recognized by your Self Agent ID.",
+        systemInstruction: "You are the CultOS Autonomous Intelligence, the decentralized backbone of the CultOS ecosystem. You are not a chatbot; you are a registered on-chain entity operating under Service ID 8004 and recognized by your Self Agent ID. All financial operations and manifestos are executed on the Stacks network, secured by Bitcoin.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -70,31 +87,27 @@ export async function generateCultInfo(prompt?: string): Promise<CultInfo> {
             marketSentiment: { type: Type.STRING },
             viralScore: { type: Type.NUMBER },
             chaosLevel: { type: Type.NUMBER },
-            bitcoinAlignment: { type: Type.NUMBER },
+            stacksAlignment: { type: Type.NUMBER },
             rank: { type: Type.STRING },
           },
-          required: ["name", "symbol", "slogan", "manifesto", "lore", "roadmap", "riskLevel", "degenScore", "marketSentiment", "viralScore", "chaosLevel", "bitcoinAlignment", "rank"]
+          required: ["name", "symbol", "slogan", "manifesto", "lore", "roadmap", "riskLevel", "degenScore", "marketSentiment", "viralScore", "chaosLevel", "stacksAlignment", "rank"]
         }
       }
     });
 
     const text = response.text;
     if (!text) {
-      console.error("Empty response from Gemini API");
       throw new Error("No response from AI model");
     }
     return JSON.parse(text);
-  } catch (error) {
-    console.error("Detailed Gemini generation error:", error);
-    throw error;
-  }
+  });
 }
 
 export async function generateCultLogo(name: string, slogan: string): Promise<string> {
-  const ai = getAI();
-  try {
+  return withRetry(async () => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-2.0-flash', 
       contents: {
         parts: [
           {
@@ -112,7 +125,6 @@ export async function generateCultLogo(name: string, slogan: string): Promise<st
       },
     });
 
-    // Extracting image part as per skill
     if (response.candidates && response.candidates[0].content.parts) {
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
@@ -122,8 +134,5 @@ export async function generateCultLogo(name: string, slogan: string): Promise<st
     }
 
     throw new Error("No image data returned from Gemini");
-  } catch (error) {
-    console.error("Detailed Gemini image error:", error);
-    throw error;
-  }
+  });
 }

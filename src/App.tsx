@@ -29,13 +29,13 @@ import confetti from 'canvas-confetti';
 import { AppConfig, UserSession, showConnect, authenticate, openSTXTransfer } from '@stacks/connect';
 import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
 
-const DEFAULT_NETWORK = STACKS_TESTNET;
+const DEFAULT_NETWORK = STACKS_MAINNET;
 const EXPLORER_URL = 'https://explorer.hiro.so';
 
 const TERMINAL_MESSAGES = [
   "SCANNING INTERNET RELIGION...",
   "EXTRACTING MEMETIC POTENTIAL...",
-  "ANALYZING BITCOIN ALPHA LAYER...",
+  "ANALYZING BITCOIN SECURITY (VIA STACKS)...",
   "GENERATING CULT MANIFESTO...",
   "CALIBRATING DEGEN LEVELS...",
   "DEGEN LEVEL CRITICAL: READY.",
@@ -44,7 +44,7 @@ const TERMINAL_MESSAGES = [
 const TUTORIAL_STEPS = [
   {
     title: "Welcome to CultOS",
-    description: "Your portal to the memetic consensus layer on Bitcoin. Let's manifest your first digital movement.",
+    description: "Your portal to the memetic consensus layer on Stacks. Let's manifest your first digital movement.",
     targetId: null,
   },
   {
@@ -80,7 +80,7 @@ export default function App() {
   const [isGeneratingLogo, setIsGeneratingLogo] = useState(false);
   const [generatedCult, setGeneratedCult] = useState<CultInfo | null>(null);
   const [stxBalance, setStxBalance] = useState<string>('0.00');
-  const [useTestnet, setUseTestnet] = useState(true);
+  const [useTestnet, setUseTestnet] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
@@ -89,6 +89,14 @@ export default function App() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showWalletPrompt, setShowWalletPrompt] = useState(false);
+  const [lastTxId, setLastTxId] = useState<string | null>(null);
+  const [manifestedCults, setManifestedCults] = useState<any[]>([
+    { name: 'BreadChain', symbol: 'WHEAT', rank: 'High Oracle', address: 'SP1P...K8H2' },
+    { name: 'MoonChurch', symbol: 'LUNA', rank: 'Lunar Priestess', address: 'SP3A...99QW' },
+    { name: 'PepeOracle', symbol: 'PRCL', rank: 'Chaos Wizard', address: 'SP2F...M1RA' },
+    { name: 'SatoshiCult', symbol: 'SATC', rank: 'Genesis Sage', address: 'SP00...2Q6V' },
+  ]);
   const [isInIframe, setIsInIframe] = useState(false);
   const [transferTimer, setTransferTimer] = useState<number | null>(null);
 
@@ -154,11 +162,6 @@ export default function App() {
           setUserData(uData);
           setStxAddress(address);
           setWalletConnected(true);
-          
-          if (isInIframe && terminalLogs.length > 5) {
-            addTerminalLog("IFRAME_DETECTED: TRANSACTION_POPUP_MAY_VAPORIZE.");
-            addTerminalLog("SUGGESTION: RELAUNCH_IN_NEW_TAB_FOR_STABILITY.");
-          }
         } else if (userSession.isSignInPending()) {
           addTerminalLog("PROCESSING AUTH_RESPONSE...");
           try {
@@ -232,6 +235,12 @@ export default function App() {
     const hasSeenTutorial = localStorage.getItem('cultos_tutorial_seen');
     if (!hasSeenTutorial) {
       setTimeout(() => setShowTutorial(true), 3000);
+    }
+
+    // Check if user has seen wallet prompt
+    const hasSeenWalletPrompt = localStorage.getItem('cultos_wallet_prompt_seen');
+    if (!hasSeenWalletPrompt) {
+      setShowWalletPrompt(true);
     }
 
     const detectProtocols = () => {
@@ -388,50 +397,56 @@ export default function App() {
 
     setIsTransferring(true);
     addTerminalLog("INITIATING STACKS BROADCAST FEE [0.1 STX]...");
+    console.log("Preparing STX Transfer to registry...");
 
     // Add safety timeout for iframe/blocked popups
     const timer = window.setTimeout(() => {
       if (isTransferring) {
         setIsTransferring(false);
         addTerminalLog("SYSTEM_TIMEOUT: TRANSACTION_STUCK_OR_BLOCKED.");
-        addTerminalLog("IFRAME_RESTRICTION: PLEASE OPEN IN NEW TAB.");
+        console.warn("Transaction timed out or blocked by popup blocker.");
       }
-    }, 45000);
+    }, 60000); // Increased to 60s
     setTransferTimer(timer);
 
     try {
       if (typeof openSTXTransfer !== 'function') {
+        console.error("openSTXTransfer primitive missing from @stacks/connect");
         throw new Error("STX_TRANSFER_CORE_MISSING");
       }
 
       const recipient = useTestnet 
-        ? 'STQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF' 
-        : 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF';
+        ? 'ST000000000000000000002AMW42H' // Burn address or registry (standardized)
+        : 'SP000000000000000000002Q6VF78';
 
       const network = useTestnet ? STACKS_TESTNET : STACKS_MAINNET;
+      console.log(`Broadcasting to ${useTestnet ? 'Testnet' : 'Mainnet'} via ${recipient}`);
 
       await openSTXTransfer({
         network,
         recipient,
-        amount: '100000', // 0.1 STX in microstacks
+        amount: '100000', // 0.1 STX
         memo: "CultOS Manifestation",
         appDetails: {
           name: 'CultOS',
-          icon: window.location.origin + '/favicon.ico',
-          description: 'Manifest your internet religion on Stacks.',
+          icon: window.location.origin + '/logo.png',
         },
         onFinish: (data: any) => {
+          console.log("Transaction success:", data);
           setIsTransferring(false);
           const txId = data?.txId;
           if (typeof txId === 'string') {
+            setLastTxId(txId);
             addTerminalLog(`FEE PAID. TXID: ${txId.slice(0, 12)}...`);
+            
+            // Add to manifested stream
+            if (generatedCult) {
+              setManifestedCults(prev => [{ ...generatedCult, address: stxAddress }, ...prev].slice(0, 6));
+            }
           } else {
             addTerminalLog("FEE PAID. TRANSACTION BROADCASTED.");
           }
           
-          if (generatedCult) {
-            addTerminalLog(`CULT MANIFESTED ON ${useTestnet ? 'TESTNET' : 'MAINNET'}: ${generatedCult.name}`);
-          }
           setShowSuccess(true);
           confetti({
             particleCount: 200,
@@ -441,12 +456,13 @@ export default function App() {
           });
         },
         onCancel: () => {
+          console.log("Transaction canceled");
           setIsTransferring(false);
           addTerminalLog("TRANSACTION CANCELED BY USER");
         },
       });
     } catch (e: any) {
-      console.error("Transaction error:", e);
+      console.error("Deep transaction failure:", e);
       addTerminalLog(`TRANSACTION ERROR: ${e?.message || "REJECTED"}`);
       setIsTransferring(false);
     }
@@ -514,28 +530,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Iframe Warning Banner */}
-      {isInIframe && (
-        <motion.div 
-          initial={{ y: -50 }}
-          animate={{ y: 0 }}
-          className="bg-purple-600/20 border-b border-purple-500/30 px-4 py-1.5 flex items-center justify-center gap-3 z-[100] backdrop-blur-md"
-        >
-          <ShieldAlert className="w-4 h-4 text-purple-400" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-purple-200">
-            Iframe Detected: Wallet interactions may be unstable. 
-            <a 
-              href={window.location.href} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="ml-2 underline hover:text-white"
-            >
-              Open in new tab
-            </a>
-          </p>
-        </motion.div>
-      )}
-
       {/* Success Manifestation Modal */}
       <AnimatePresence>
         {showSuccess && (
@@ -546,76 +540,198 @@ export default function App() {
             className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-3xl"
           >
             <motion.div 
-              initial={{ scale: 0.8, y: 50, rotate: -2 }}
-              animate={{ scale: 1, y: 0, rotate: 0 }}
+              initial={{ scale: 0.5, y: 100, rotate: -15, opacity: 0 }}
+              animate={{ 
+                scale: 1, 
+                y: 0, 
+                rotate: 0, 
+                opacity: 1,
+                transition: { 
+                  type: "spring", 
+                  damping: 12, 
+                  stiffness: 100,
+                  delay: 0.2
+                } 
+              }}
               className="bg-zinc-900 border-2 border-green-500/50 p-10 rounded-[3rem] w-full max-w-lg shadow-[0_0_100px_rgba(34,197,94,0.3)] relative overflow-hidden text-center"
             >
+              {/* Particle Burst Elements */}
+              {[...Array(6)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ 
+                    opacity: [0, 1, 0], 
+                    scale: [0, 1.5, 0],
+                    x: Math.cos(i * 60 * Math.PI / 180) * 200,
+                    y: Math.sin(i * 60 * Math.PI / 180) * 200,
+                  }}
+                  transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.1 }}
+                  className="absolute top-1/2 left-1/2 w-2 h-2 bg-purple-500 rounded-full blur-[1px]"
+                />
+              ))}
+
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
               
               <motion.div 
                 animate={{ 
-                  scale: [1, 1.2, 1],
-                  rotate: [0, 10, -10, 0]
+                  scale: [1, 1.3, 1],
+                  rotate: [0, 15, -15, 0],
+                  filter: ["drop-shadow(0 0 10px #22c55e)", "drop-shadow(0 0 30px #22c55e)", "drop-shadow(0 0 10px #22c55e)"]
                 }}
-                transition={{ duration: 4, repeat: Infinity }}
-                className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-500/40"
+                transition={{ duration: 3, repeat: Infinity }}
+                className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-500/40 relative z-10"
               >
                 <Zap className="w-12 h-12 text-green-400 fill-green-400/20" />
               </motion.div>
 
-              <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-2 italic">
+              <motion.h2 
+                initial={{ opacity: 0, letterSpacing: "0.2em" }}
+                animate={{ opacity: 1, letterSpacing: "normal" }}
+                transition={{ delay: 0.5, duration: 0.8 }}
+                className="text-4xl font-black text-white uppercase tracking-tighter mb-2 italic"
+              >
                 Manifestation Complete
-              </h2>
-              <p className="text-green-400 font-mono text-sm tracking-widest mb-8 uppercase">
+              </motion.h2>
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.7 }}
+                className="text-green-400 font-mono text-sm tracking-widest mb-8 uppercase"
+              >
                 {generatedCult?.name} has entered the memetic layer
-              </p>
+              </motion.p>
 
-              <div className="bg-black/50 border border-white/10 p-6 rounded-2xl mb-8 space-y-3 text-left">
+              <motion.div 
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 1 }}
+                className="bg-black/50 border border-white/10 p-6 rounded-2xl mb-8 space-y-3 text-left backdrop-blur-md"
+              >
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-zinc-500">SYMBOL</span>
-                  <span className="text-white font-bold">{generatedCult?.symbol}</span>
+                  <span className="text-zinc-500 font-bold tracking-widest uppercase">Symbol</span>
+                  <span className="text-white font-black italic">{generatedCult?.symbol}</span>
                 </div>
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-zinc-500">NETWORK</span>
-                  <span className="text-purple-400 font-bold">{useTestnet ? 'Stacks Testnet' : 'Stacks Mainnet'}</span>
+                  <span className="text-zinc-500 font-bold tracking-widest uppercase">Network</span>
+                  <span className="text-purple-400 font-black italic">{useTestnet ? 'Stacks Testnet' : 'Stacks Mainnet'}</span>
                 </div>
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-zinc-500">RECORDED_AT</span>
-                  <span className="text-white font-bold break-all underline decoration-purple-500/50">
+                
+                {lastTxId && (
+                  <div className="flex justify-between text-xs font-mono">
+                    <span className="text-zinc-500 font-bold tracking-widest uppercase">Tx_Hash</span>
                     <a 
-                      href={`${EXPLORER_URL}/address/${useTestnet ? 'STQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF' : 'SPQ189E66S20X7ATY7794HBY6743JE9YJMCKHAEF'}?chain=${useTestnet ? 'testnet' : 'mainnet'}`}
+                      href={`${EXPLORER_URL}/txid/${lastTxId}?chain=${useTestnet ? 'testnet' : 'mainnet'}`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      className="text-green-400 font-black italic hover:text-white transition-colors flex items-center gap-1 group"
                     >
-                      CultOS_Registry
+                      {lastTxId.slice(0, 8)}...{lastTxId.slice(-8)}
+                      <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </a>
+                  </div>
+                )}
+                
+                <div className="flex justify-between text-xs font-mono">
+                  <span className="text-zinc-500 font-bold tracking-widest uppercase">Registry</span>
+                  <span className="text-white font-bold break-all underline decoration-purple-500/50">
+                    <a 
+                      href={`${EXPLORER_URL}/address/${useTestnet ? 'ST000000000000000000002AMW42H' : 'SP000000000000000000002Q6VF78'}?chain=${useTestnet ? 'testnet' : 'mainnet'}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-purple-400 transition-colors"
+                    >
+                      CultOS_Core
                     </a>
                   </span>
                 </div>
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-zinc-500">STATUS</span>
-                  <span className="text-green-400 font-bold animate-pulse">VIRAL_READY</span>
+                <div className="flex justify-between text-xs font-mono border-t border-white/5 pt-2">
+                  <span className="text-zinc-500 font-bold tracking-widest uppercase">Status</span>
+                  <span className="text-green-400 font-black animate-pulse flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" /> VIRAL_READY
+                  </span>
                 </div>
-              </div>
+              </motion.div>
 
               <div className="grid grid-cols-2 gap-4">
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setShowTemplate(true)}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                  className="bg-zinc-800 hover:bg-zinc-700 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 border border-white/10"
                 >
                   <ScrollText className="w-4 h-4" />
                   View Code
-                </button>
-                <button 
+                </motion.button>
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => setShowSuccess(false)}
-                  className="bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs shadow-lg shadow-green-900/20"
+                  className="bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-[10px] shadow-xl shadow-green-900/40 border border-green-400/30"
                 >
                   Continue
-                </button>
+                </motion.button>
               </div>
               
-              <p className="mt-6 text-[10px] text-zinc-500 font-mono uppercase tracking-tighter text-center">
-                Copy the code and deploy via Stacks Explorer to finalize the ritual.
+              <p className="mt-6 text-[9px] text-zinc-500 font-mono uppercase tracking-tighter text-center italic opacity-60">
+                The memetic sigil is now etched into the Bitcoin alpha layer.
               </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Wallet Advisory Modal */}
+      <AnimatePresence>
+        {showWalletPrompt && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900 border border-purple-500/30 p-8 rounded-3xl w-full max-w-sm shadow-[0_0_50px_rgba(168,85,247,0.2)] text-center relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 via-green-400 to-purple-600 animate-gradient-x" />
+              
+              <div className="w-16 h-16 bg-purple-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-purple-500/20">
+                <Wallet className="w-8 h-8 text-purple-400" />
+              </div>
+
+              <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-4 italic">
+                Optimized Experience
+              </h2>
+              
+              <div className="space-y-4 text-gray-400 text-sm leading-relaxed mb-8">
+                <p>
+                  To manifest your cult on the <span className="text-white font-bold">Stacks Network</span>, we recommend using a compatible wallet browser extension or app.
+                </p>
+                <div className="flex flex-col gap-2 pt-2">
+                  <div className="flex items-center justify-center gap-2 py-2 px-4 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-widest text-white italic">
+                    <TrendingUp className="w-3 h-3 text-green-400" /> Xverse Wallet
+                  </div>
+                  <div className="flex items-center justify-center gap-2 py-2 px-4 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-widest text-white italic">
+                    <ShieldAlert className="w-3 h-3 text-orange-400" /> Leather Wallet
+                  </div>
+                </div>
+                <p className="text-[10px] text-zinc-500 font-mono mt-4 italic">
+                  * Essential for mobile users to ensure secure manifestation & transaction signing.
+                </p>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setShowWalletPrompt(false);
+                  localStorage.setItem('cultos_wallet_prompt_seen', 'true');
+                  addTerminalLog("WALLET_ADVISORY_ACKNOWLEDGED.");
+                }}
+                className="w-full bg-white text-black font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs hover:bg-purple-400 shadow-xl active:scale-95"
+              >
+                Enter CultOS
+              </button>
             </motion.div>
           </motion.div>
         )}
@@ -683,7 +799,7 @@ export default function App() {
               </h3>
               <div className="space-y-4 text-gray-300 leading-relaxed font-medium">
                 <p>
-                  CultOS is the world's first <span className="text-purple-400">Memetic Manifestation Engine</span> built on the Bitcoin alpha layer via Stacks. 
+                  CultOS is the world's first <span className="text-purple-400">Memetic Manifestation Engine</span> built on the Bitcoin ecosystem via Stacks. 
                 </p>
                 <p>
                   We leverage advanced neural synthesis to bridge the gap between internet subcultures and permanent blockchain identity. Every cult generated is a unique algorithmic artifacts, ready for mainnet deployment.
@@ -1154,7 +1270,7 @@ export default function App() {
                   <div className="flex gap-4">
                     <div className="text-left flex flex-col">
                       <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">Network Alignment</span>
-                      <span className="text-sm text-white font-black italic uppercase">Validated on Bitcoin</span>
+                      <span className="text-sm text-white font-black italic uppercase">Secured by Bitcoin via Stacks</span>
                     </div>
                   </div>
                   <div className="flex gap-3">
@@ -1182,36 +1298,44 @@ export default function App() {
         {/* Right Sidebar: Leaderboard & Premium */}
         <aside className="w-full lg:w-72 flex flex-col sm:flex-row lg:flex-col gap-4 shrink-0 pb-10 lg:pb-0">
 
-          {/* Leaderboard */}
+          {/* Newest Manifested Stream */}
           <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col overflow-hidden shadow-lg backdrop-blur-sm min-h-[300px] sm:min-h-0">
             <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4 flex items-center justify-between">
-              Trending Sects 
-              <span className="text-[9px] bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded border border-green-500/20 font-mono">LIVE</span>
+              Manifestation Stream
+              <span className="text-[9px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20 font-mono animate-pulse">STREAMING</span>
             </h3>
             <div className="space-y-3 overflow-auto pr-1 scrollbar-none">
-              {[
-                { name: 'BreadChain', symbol: 'WHEAT', change: '+420%', color: 'green' },
-                { name: 'MoonChurch', symbol: 'LUNA', change: '+215%', color: 'green' },
-                { name: 'PepeOracle', symbol: 'PRCL', change: '-12%', color: 'red' },
-                { name: 'SatoshiCult', symbol: 'SATC', change: '+88%', color: 'green' },
-                { name: 'BananaFi', symbol: 'BANA', change: '+1,240%', color: 'green' },
-              ].map((cult, i) => (
-                <div key={cult.name} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-purple-500/30 transition-all group cursor-pointer shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <span className="text-purple-400 font-mono text-[10px] font-bold">0{i+1}</span>
-                    <div className="flex flex-col">
-                      <span className="text-[13px] font-black text-white group-hover:text-purple-300 transition-colors">{cult.name}</span>
-                      <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">${cult.symbol}</span>
+              <AnimatePresence initial={false}>
+                {manifestedCults.map((cult, i) => (
+                  <motion.div 
+                    key={`${cult.name}-${i}`} 
+                    initial={{ height: 0, opacity: 0, x: 20 }}
+                    animate={{ height: 'auto', opacity: 1, x: 0 }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-purple-500/30 transition-all group cursor-pointer shadow-sm relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 to-purple-500/5 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                    <div className="flex items-center gap-3 relative z-10">
+                      <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center text-[10px] font-black group-hover:bg-purple-500 group-hover:text-black transition-colors">
+                        {cult.symbol?.[0] || 'Ω'}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[13px] font-black text-white group-hover:text-purple-300 transition-colors uppercase tracking-tight">{cult.name}</span>
+                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest italic">{cult.rank || 'NEOPHYTE'}</span>
+                      </div>
                     </div>
-                  </div>
-                  <span className={cn(
-                    "text-[10px] font-black uppercase italic tracking-tighter drop-shadow-sm",
-                    cult.color === 'green' ? "text-green-400" : "text-red-400"
-                  )}>
-                    {cult.change}
-                  </span>
-                </div>
-              ))}
+                    <div className="flex flex-col items-end relative z-10 shrink-0">
+                      <span className="text-[8px] font-black text-purple-400 uppercase italic tracking-widest bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                        {cult.address ? (cult.address.includes('...') ? cult.address : `${cult.address.slice(0, 4)}...${cult.address.slice(-4)}`) : 'ANONYMOUS'}
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/5">
+              <p className="text-[8px] text-zinc-500 font-mono text-center uppercase tracking-widest leading-relaxed">
+                Manifestations are permanent records on the Bitcoin layer via Stacks.
+              </p>
             </div>
           </div>
 
