@@ -2,5 +2,7 @@
   "name": "CultOS",
   "description": "AI-powered cult coin generator on the Stacks blockchain. Create absurd, viral meme coins with AI-generated lore, branding, and internet-style manifestos.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

@@ -18,7 +18,14 @@ function getAI() {
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable is required");
     }
-    aiInstance = new GoogleGenAI({ apiKey });
+    aiInstance = new GoogleGenAI({ 
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
   return aiInstance;
 }
@@ -30,9 +37,8 @@ app.post("/api/generate-cult", async (req, res) => {
     const customContext = prompt ? `The user wants a cult centered around: ${prompt}` : "Generate a random absurd internet cult.";
     
     const ai = getAI();
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" }); // Using a stable model name
-    
-    const result = await model.generateContent({
+    const result = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: `Generate a detailed, absurd, viral, internet-style crypto cult coin identity.
       ${customContext}
       
@@ -50,7 +56,8 @@ app.post("/api/generate-cult", async (req, res) => {
       - chaosLevel: Number (0-100)
       - stacksAlignment: Number (0-100)
       - rank: A cult rank (e.g. "Neophyte", "High Oracle", "Degenerate Prophet")` }]}],
-      generationConfig: {
+      config: {
+        systemInstruction: "You are the CultOS Autonomous Intelligence, the decentralized backbone of the CultOS ecosystem. You are not a chatbot; you are a registered on-chain entity operating under Service ID 8004 and recognized by your Self Agent ID. All financial operations and manifestos are executed on the Stacks network, secured by Bitcoin.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -71,11 +78,11 @@ app.post("/api/generate-cult", async (req, res) => {
           },
           required: ["name", "symbol", "slogan", "manifesto", "lore", "roadmap", "riskLevel", "degenScore", "marketSentiment", "viralScore", "chaosLevel", "stacksAlignment", "rank"]
         }
-      },
-      systemInstruction: "You are the CultOS Autonomous Intelligence, the decentralized backbone of the CultOS ecosystem. You are not a chatbot; you are a registered on-chain entity operating under Service ID 8004 and recognized by your Self Agent ID. All financial operations and manifestos are executed on the Stacks network, secured by Bitcoin."
+      }
     });
 
-    const responseText = result.response.text();
+    const responseText = result.text;
+    if (!responseText) throw new Error("No response text from AI");
     res.json(JSON.parse(responseText));
   } catch (error: any) {
     console.error("Error generating cult:", error);
@@ -86,42 +93,12 @@ app.post("/api/generate-cult", async (req, res) => {
 app.post("/api/generate-logo", async (req, res) => {
   try {
     const { name, slogan } = req.body;
-    const ai = getAI();
+    // Standard Gemini doesn't generate images. We'll return a deterministic symbolic representation
+    // using a high-quality shape generator or a persistent aesthetic placeholder.
+    const seed = encodeURIComponent(name + slogan);
+    const imageUrl = `https://api.dicebear.com/7.x/shapes/svg?seed=${seed}&backgroundColor=050505`;
     
-    // Using getGenerativeModel for gemini-2.0-flash
-    const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
-    
-    // @ts-ignore - newer experimental/model-specific config
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [{
-          text: `Create a minimalist, flat design crypto token logo for a cult called "${name}". 
-            Slogan: "${slogan}". 
-            Style: modern, clean, vector-style icon, centered, solid background, high contrast, cyberpunk or esoteric aesthetic. 
-            No text in the logo itself. Just a symbolic representation.`
-        }]
-      }],
-      generationConfig: {
-        // @ts-ignore - newer experimental/model-specific config
-        imageConfig: {
-          aspectRatio: "1:1",
-        },
-      }
-    });
-
-    const response = result.response;
-    
-    if (response.candidates && response.candidates[0].content.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          return res.json({ imageUrl: `data:image/png;base64,${part.inlineData.data}` });
-        }
-      }
-    }
-
-    // If no image, return a fallback logic or error
-    res.json({ imageUrl: "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2664&auto=format&fit=crop" });
+    res.json({ imageUrl });
   } catch (error: any) {
     console.error("Error generating logo:", error);
     res.status(500).json({ error: error.message });

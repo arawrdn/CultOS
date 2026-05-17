@@ -71,7 +71,7 @@ export function MiniPayDonation() {
       // Convert to wei
       const value = parseEther(amount.toString());
 
-      await client.sendTransaction({
+      await (client as any).sendTransaction({
         account,
         to: DONATION_ADDRESS,
         value,
