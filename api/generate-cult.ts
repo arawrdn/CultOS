@@ -1,18 +1,10 @@
-import express from "express";
-import path from "path";
-import { createServer as createViteServer } from "vite";
-import { getAI, CULT_SCHEMA, SYSTEM_INSTRUCTION } from "./src/lib/gemini.js";
-import dotenv from "dotenv";
+import { getAI, CULT_SCHEMA, SYSTEM_INSTRUCTION } from "../src/lib/gemini.js";
 
-dotenv.config();
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-const app = express();
-const PORT = 3000;
-
-app.use(express.json());
-
-// API Routes
-app.post("/api/generate-cult", async (req, res) => {
   try {
     const { prompt } = req.body;
     const customContext = prompt ? `The user wants a cult centered around: ${prompt}` : "Generate a random absurd internet cult.";
@@ -46,46 +38,9 @@ app.post("/api/generate-cult", async (req, res) => {
 
     const responseText = result.text;
     if (!responseText) throw new Error("No response text from AI");
-    res.json(JSON.parse(responseText));
+    res.status(200).json(JSON.parse(responseText));
   } catch (error: any) {
     console.error("Error generating cult:", error);
     res.status(500).json({ error: error.message });
   }
-});
-
-app.post("/api/generate-logo", async (req, res) => {
-  try {
-    const { name, slogan } = req.body;
-    // Standard Gemini doesn't generate images. We'll return a deterministic symbolic representation
-    // using a high-quality shape generator or a persistent aesthetic placeholder.
-    const seed = encodeURIComponent(name + slogan);
-    const imageUrl = `https://api.dicebear.com/7.x/shapes/svg?seed=${seed}&backgroundColor=050505`;
-    
-    res.json({ imageUrl });
-  } catch (error: any) {
-    console.error("Error generating logo:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
 }
-
-startServer();
