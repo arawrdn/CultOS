@@ -1,4 +1,4 @@
 // SPDX-License-Identifier: MIT
 // AUTO-GENERATED: CultOS Celo Bindings
-// Build Timestamp: Tue May 19 08:54:53 UTC 2026
-// Checksum: 955ea3b9ed4d
+// Build Timestamp: Tue May 19 08:54:55 UTC 2026
+// Checksum: a42811cf5ab1
