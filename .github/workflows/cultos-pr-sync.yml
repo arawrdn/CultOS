@@ -50,7 +50,6 @@ jobs:
           
           mkdir -p contracts/artifacts/stacks contracts/artifacts/celo
           HASH=$(head /dev/urandom | tr -dc 'a-f0-9' | head -c 8)
-          TIMESTAMP=$(date -u)
           
           echo ";; REFACTOR UPDATE: $HASH" >> contracts/artifacts/stacks/bindings.clar
           echo "// REFACTOR UPDATE: $HASH" >> contracts/artifacts/celo/Interface.sol
@@ -82,8 +81,6 @@ jobs:
           gh pr merge "$PR_URL" --merge --delete-branch
 
       - name: Pipeline Telemetry Sync
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ env.SKIP_RUN }}" == "true" ]; then
             sleep 21600
@@ -93,5 +90,3 @@ jobs:
             SLEEP_TIME=$(( MIN_WAIT + RANDOM % (MAX_WAIT - MIN_WAIT + 1) ))
             sleep $SLEEP_TIME
           fi
-          
-          gh api -X POST /repos/${{ github.repository }}/actions/workflows/cultos-pr-sync.yml/dispatches -f ref=main
